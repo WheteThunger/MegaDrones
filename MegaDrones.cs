@@ -246,6 +246,14 @@ namespace Oxide.Plugins
             StartControlling(player, station, drone);
         }
 
+        private bool? OnCCTVDirectionChange(CCTV_RC camera)
+        {
+            if (GetParentMegaDrone(camera) != null)
+                return false;
+
+            return null;
+        }
+
         // This hook is exposed by plugin: Vehicle Deployed Locks (VehicleDeployedLocks).
         private void OnVehicleLockDeployed(ComputerStation computerStation, BaseLock baseLock)
         {
