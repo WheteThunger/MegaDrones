@@ -1019,13 +1019,10 @@ namespace Oxide.Plugins
             if (rootEntity == null)
                 return false;
 
-            if (rootEntity != null)
+            foreach (var child in rootEntity.children)
             {
-                foreach (var child in drone.children)
-                {
-                    if (child is BasePlayer)
-                        return true;
-                }
+                if (child is BasePlayer)
+                    return true;
             }
 
             return false;
