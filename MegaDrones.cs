@@ -207,11 +207,17 @@ namespace Oxide.Plugins
             if (!IsMegaDrone(drone, out userIdString))
                 return;
 
-            var player = BasePlayer.Find(userIdString);
-            if (player != null)
-                ChatMessage(player, Lang.InfoDroneDestroyed);
+            if (userIdString != null)
+            {
+                var player = BasePlayer.Find(userIdString);
+                if (player != null)
+                    ChatMessage(player, Lang.InfoDroneDestroyed);
 
-            _pluginData.UnregisterPlayerDrone(userIdString);
+                _pluginData.UnregisterPlayerDrone(userIdString);
+                return;
+            }
+
+            _pluginData.UnregisterOtherDrone(drone);
         }
 
         private void OnBookmarkControlStarted(ComputerStation station, BasePlayer player, string bookmarkName, CCTV_RC camera)
@@ -1141,12 +1147,6 @@ namespace Oxide.Plugins
                 return droneIds;
             }
 
-            public bool IsMegaDrone(Drone drone)
-            {
-                string userIdString;
-                return IsMegaDrone(drone, out userIdString);
-            }
-
             public bool IsMegaDrone(Drone drone, out string userIdString)
             {
                 var droneId = drone.net.ID;
@@ -1160,8 +1160,14 @@ namespace Oxide.Plugins
                     }
                 }
 
-                userIdString = string.Empty;
+                userIdString = null;
                 return OtherDrones.Contains(droneId);
+            }
+
+            public bool IsMegaDrone(Drone drone)
+            {
+                string userIdString;
+                return IsMegaDrone(drone, out userIdString);
             }
 
             public void RegisterPlayerDrone(string userId, Drone drone) =>
@@ -1172,6 +1178,9 @@ namespace Oxide.Plugins
 
             public void RegisterOtherDrone(Drone drone) =>
                 OtherDrones.Add(drone.net.ID);
+
+            public void UnregisterOtherDrone(Drone drone) =>
+                OtherDrones.Remove(drone.net.ID);
 
             public long GetRemainingCooldownSeconds(string userId, CooldownType cooldownType)
             {
