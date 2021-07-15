@@ -288,7 +288,8 @@ namespace Oxide.Plugins
             return null;
         }
 
-        private bool? OnDroneRangeLimit(Drone drone, ComputerStation station, BasePlayer player)
+        // This hook is exposed by plugin: Limited Drone Range (LimitedDroneRange).
+        private bool? OnDroneRangeLimit(Drone drone)
         {
             if (IsMegaDrone(drone))
                 return false;
@@ -375,7 +376,7 @@ namespace Oxide.Plugins
 
         private void SubCommand_Spawn(IPlayer player, string cmd)
         {
-            if (!VerifyPermissionAny(player, PermissionSpawn))
+            if (!VerifyPermission(player, PermissionSpawn))
                 return;
 
             var basePlayer = player.Object as BasePlayer;
@@ -383,9 +384,10 @@ namespace Oxide.Plugins
             Quaternion spawnRotation;
 
             if (!VerifyCanInteract(player)
+                || !VerifyNotMounted(player)
                 || !VerifyHasNoDrone(player, cmd)
                 || !VerifyOffCooldown(player, CooldownType.Spawn)
-                || !_pluginConfig.CanSpawnBuildingBlocked && !VerifyNotBuildingBlocked(player)
+                || !_pluginConfig.CanSpawnBuildingBlocked && !VerifyCanBuild(player)
                 || !VerifySufficientSpace(player, out spawnPosition, out spawnRotation)
                 || SpawnMegaDroneWasBlocked(basePlayer))
                 return;
@@ -400,7 +402,7 @@ namespace Oxide.Plugins
 
         private void SubCommand_Fetch(IPlayer player)
         {
-            if (!VerifyPermissionAny(player, PermissionFetch))
+            if (!VerifyPermission(player, PermissionFetch))
                 return;
 
             Drone drone;
@@ -410,10 +412,11 @@ namespace Oxide.Plugins
             Quaternion fetchRotation;
 
             if (!VerifyCanInteract(player)
+                || !VerifyNotMounted(player)
                 || !VerifyHasDrone(player, out drone)
                 || !VerifyOffCooldown(player, CooldownType.Fetch)
                 || !_pluginConfig.CanFetchOccupied && !VerifyDroneNotOccupied(player, drone)
-                || !_pluginConfig.CanFetchBuildingBlocked && !VerifyNotBuildingBlocked(player)
+                || !_pluginConfig.CanFetchBuildingBlocked && !VerifyCanBuild(player)
                 || !VerifySufficientSpace(player, out fetchPosition, out fetchRotation)
                 || FetchMegaDroneWasBlocked(basePlayer, drone))
                 return;
@@ -436,7 +439,7 @@ namespace Oxide.Plugins
 
         private void SubCommand_Destroy(IPlayer player)
         {
-            if (!VerifyPermissionAny(player, PermissionDestroy))
+            if (!VerifyPermission(player, PermissionDestroy))
                 return;
 
             var basePlayer = player.Object as BasePlayer;
@@ -489,17 +492,13 @@ namespace Oxide.Plugins
 
         #region Helper Methods - Command Checks
 
-        private bool VerifyPermissionAny(IPlayer player, params string[] permissionNames)
+        private bool VerifyPermission(IPlayer player, string perm)
         {
-            foreach (var perm in permissionNames)
-            {
-                if (!permission.UserHasPermission(player.Id, perm))
-                {
-                    ReplyToPlayer(player, Lang.ErrorNoPermission);
-                    return false;
-                }
-            }
-            return true;
+            if (permission.UserHasPermission(player.Id, perm))
+                return true;
+
+            ReplyToPlayer(player, Lang.ErrorNoPermission);
+            return false;
         }
 
         private bool VerifyHasNoDrone(IPlayer player, string cmd)
@@ -518,43 +517,39 @@ namespace Oxide.Plugins
         private bool VerifyHasDrone(IPlayer player, out Drone drone)
         {
             drone = FindPlayerDrone(player);
-            if (drone == null)
-            {
-                ReplyToPlayer(player, Lang.ErrorDroneNotFound);
-                return false;
-            }
-            return true;
+            if (drone != null)
+                return true;
+
+            ReplyToPlayer(player, Lang.ErrorDroneNotFound);
+            return false;
         }
 
-        private bool VerifyNotBuildingBlocked(IPlayer player)
+        private bool VerifyCanBuild(IPlayer player)
         {
-            if ((player.Object as BasePlayer).IsBuildingBlocked())
-            {
-                ReplyToPlayer(player, Lang.ErrorBuildingBlocked);
-                return false;
-            }
-            return true;
+            if ((player.Object as BasePlayer).CanBuild())
+                return true;
+
+            ReplyToPlayer(player, Lang.ErrorBuildingBlocked);
+            return false;
         }
 
         private bool VerifyDroneNotOccupied(IPlayer player, Drone drone)
         {
-            if (GetMountedPlayer(drone) != null || HasChildPlayer(drone))
-            {
-                ReplyToPlayer(player, Lang.ErrorDroneOccupied);
-                return false;
-            }
-            return true;
+            if (GetMountedPlayer(drone) == null && !HasChildPlayer(drone))
+                return true;
+
+            ReplyToPlayer(player, Lang.ErrorDroneOccupied);
+            return false;
         }
 
         private bool VerifyOffCooldown(IPlayer player, CooldownType cooldownType)
         {
             var secondsRemaining = _pluginData.GetRemainingCooldownSeconds(player.Id, cooldownType);
-            if (secondsRemaining > 0)
-            {
-                ReplyToPlayer(player, Lang.ErrorCooldown, FormatTime(secondsRemaining));
-                return false;
-            }
-            return true;
+            if (secondsRemaining <= 0)
+                return true;
+
+            ReplyToPlayer(player, Lang.ErrorCooldown, FormatTime(secondsRemaining));
+            return false;
         }
 
         private bool VerifySufficientSpace(IPlayer player, out Vector3 determinedPosition, out Quaternion determinedRotation)
@@ -571,13 +566,11 @@ namespace Oxide.Plugins
 
         private bool VerifyCanInteract(IPlayer player)
         {
-            var basePlayer = player.Object as BasePlayer;
-            if (!basePlayer.CanInteract())
-            {
-                ReplyToPlayer(player, Lang.ErrorGenericRestricted);
-                return false;
-            }
-            return true;
+            if ((player.Object as BasePlayer).CanInteract())
+                return true;
+
+            ReplyToPlayer(player, Lang.ErrorGenericRestricted);
+            return false;
         }
 
         private bool VerifyNotMounted(IPlayer player)
@@ -653,26 +646,14 @@ namespace Oxide.Plugins
             return hookResult is bool && (bool)hookResult == false;
         }
 
-        private static Drone GetControlledDrone(ComputerStation station) =>
-            station.currentlyControllingEnt.Get(serverside: true) as Drone;
-
-        private static Drone GetControlledDrone(BasePlayer player)
-        {
-            var computerStation = player.GetMounted() as ComputerStation;
-            if (computerStation == null)
-                return null;
-
-            return GetControlledDrone(computerStation);
-        }
+        private static BaseEntity GetRootEntity(Drone drone) =>
+            _pluginInstance.DroneScaleManager?.Call("API_GetRootEntity", drone) as BaseEntity;
 
         public static bool IsMegaDrone(Drone drone) =>
             _pluginData.IsMegaDrone(drone);
 
         public static bool IsMegaDrone(Drone drone, out string userIdString) =>
             _pluginData.IsMegaDrone(drone, out userIdString);
-
-        private static BaseEntity GetRootEntity(Drone drone) =>
-            _pluginInstance.DroneScaleManager?.Call("API_GetRootEntity", drone) as BaseEntity;
 
         private static Drone GetParentMegaDrone(BaseEntity entity, out BaseEntity rootEntity)
         {
@@ -774,7 +755,6 @@ namespace Oxide.Plugins
             station.OwnerID = drone.OwnerID;
             station.isMobile = true;
 
-            // computerStation.transform.localScale = new Vector3(0, 0, 0);
             foreach (var collider in station.GetComponents<BoxCollider>())
             {
                 // Removing the box collider helps with mounting and dismounting at an angle
@@ -961,13 +941,13 @@ namespace Oxide.Plugins
             {
                 // Temporarily increase the player inventory capacity to ensure there is enough space.
                 basePlayer.inventory.containerMain.capacity++;
-                var temporaryTurretItem = ItemManager.CreateByItemID(itemid);
-                if (basePlayer.inventory.GiveItem(temporaryTurretItem))
+                var temporaryItem = ItemManager.CreateByItemID(itemid);
+                if (basePlayer.inventory.GiveItem(temporaryItem))
                 {
-                    RunOnEntityBuilt(temporaryTurretItem, entity);
-                    temporaryTurretItem.RemoveFromContainer();
+                    RunOnEntityBuilt(temporaryItem, entity);
+                    temporaryItem.RemoveFromContainer();
                 }
-                temporaryTurretItem.Remove();
+                temporaryItem.Remove();
                 basePlayer.inventory.containerMain.capacity--;
             }
         }
@@ -987,7 +967,7 @@ namespace Oxide.Plugins
             {
                 var childPlayer = child as BasePlayer;
                 if (childPlayer != null)
-                    (child as BasePlayer).SetParent(null, worldPositionStays: true);
+                    childPlayer.SetParent(null, worldPositionStays: true);
             }
         }
 
