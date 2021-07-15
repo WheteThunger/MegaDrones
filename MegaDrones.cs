@@ -70,11 +70,10 @@ namespace Oxide.Plugins
 
         private void OnServerInitialized()
         {
-            if (!VerifyDependencies())
-                return;
-
-            RefreshAllMegaDrones();
             RegisterWithVehicleDeployedLocks();
+
+            if (VerifyDependencies())
+                RefreshAllMegaDrones();
         }
 
         private void Unload()
