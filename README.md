@@ -77,6 +77,7 @@ The definition of "occupied" is when a player is mounted on the computer station
   "Error.GenericRestricted": "Error: You cannot do that right now.",
   "Error.UnknownCommand": "Error: Unrecognized command <color=#fb4>{0}</color>.",
   "Error.Mounted": "Error: Cannot do that while mounted.",
+  "Error.InsufficientSpace": "Error: Not enough space.",
   "Spawn.Success": "Here is your mega drone.",
   "Spawn.Error.DroneAlreadyExists": "Error: You already have a mega drone.",
   "Spawn.Error.DroneAlreadyExists.Help": "Try <color=#fb4>{0} fetch</color> or <color=#fb4>{0} help</color>.",

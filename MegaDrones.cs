@@ -4,6 +4,7 @@ using Newtonsoft.Json.Serialization;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
+using Rust;
 using System.Collections.Generic;
 using System;
 using System.Linq;
@@ -52,6 +53,21 @@ namespace Oxide.Plugins
 
         private static readonly Vector3 LockPosition = new Vector3(-0.65f, 0.732f, 0.242f);
         private static readonly Quaternion LockRotation = Quaternion.Euler(0, 270, 90);
+
+        private static readonly Vector3 DroneExtents = new Vector3(0.75f, 0.1f, 0.75f) * MegaDroneScale / 2;
+
+        // These layers are used to preventing spawning inside walls or players.
+        private const int BoxcastLayers = Layers.Mask.Default
+            + Layers.Mask.Deployed
+            + Layers.Mask.Player_Server
+            + Layers.Mask.AI
+            + Layers.Mask.Vehicle_Detailed
+            + Layers.Mask.Vehicle_World
+            + Layers.Mask.World
+            + Layers.Mask.Construction
+            + Layers.Mask.Tree;
+
+        private readonly RaycastHit[] _raycastBuffer = new RaycastHit[1];
 
         #endregion
 
@@ -555,13 +571,14 @@ namespace Oxide.Plugins
         private bool VerifySufficientSpace(IPlayer player, out Vector3 determinedPosition, out Quaternion determinedRotation)
         {
             var basePlayer = player.Object as BasePlayer;
-
-            // TODO: Check space
-
             determinedPosition = GetPlayerRelativeSpawnPosition(basePlayer);
             determinedRotation = GetPlayerRelativeSpawnRotation(basePlayer);
 
-            return true;
+            if (!Physics.CheckBox(determinedPosition, DroneExtents, determinedRotation, BoxcastLayers, QueryTriggerInteraction.Ignore))
+                return true;
+
+            ReplyToPlayer(player, Lang.ErrorInsufficientSpace);
+            return false;
         }
 
         private bool VerifyCanInteract(IPlayer player)
@@ -840,7 +857,7 @@ namespace Oxide.Plugins
         private static Vector3 GetPlayerRelativeSpawnPosition(BasePlayer player)
         {
             Vector3 forward = GetPlayerForwardPosition(player);
-            Vector3 position = player.transform.position + forward * 3f;
+            Vector3 position = player.transform.position + forward * 3.5f;
             position.y = player.transform.position.y + 1f;
             return position;
         }
@@ -1400,6 +1417,7 @@ namespace Oxide.Plugins
             public const string ErrorGenericRestricted = "Error.GenericRestricted";
             public const string ErrorUnknownCommand = "Error.UnknownCommand";
             public const string ErrorMounted = "Error.Mounted";
+            public const string ErrorInsufficientSpace = "Error.InsufficientSpace";
 
             public const string SpawnSuccess = "Spawn.Success";
             public const string SpawnErrorDroneAlreadyExists = "Spawn.Error.DroneAlreadyExists";
@@ -1429,6 +1447,7 @@ namespace Oxide.Plugins
                 [Lang.ErrorGenericRestricted] = "Error: You cannot do that right now.",
                 [Lang.ErrorUnknownCommand] = "Error: Unrecognized command <color=#fb4>{0}</color>.",
                 [Lang.ErrorMounted] = "Error: Cannot do that while mounted.",
+                [Lang.ErrorInsufficientSpace] = "Error: Not enough space.",
 
                 [Lang.SpawnSuccess] = "Here is your mega drone.",
                 [Lang.SpawnErrorDroneAlreadyExists] = "Error: You already have a mega drone.",
