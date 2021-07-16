@@ -451,6 +451,7 @@ namespace Oxide.Plugins
 
             _pluginData.StartCooldown(player.Id, CooldownType.Fetch);
             ReplyToPlayer(player, Lang.SpawnSuccess);
+            TryMountPlayer(drone, basePlayer);
         }
 
         private void SubCommand_Destroy(IPlayer player)
