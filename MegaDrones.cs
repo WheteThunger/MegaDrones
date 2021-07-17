@@ -67,7 +67,22 @@ namespace Oxide.Plugins
             + Layers.Mask.Construction
             + Layers.Mask.Tree;
 
-        private readonly RaycastHit[] _raycastBuffer = new RaycastHit[1];
+        private DynamicHookSubscriber<uint> _megaDroneTracker = new DynamicHookSubscriber<uint>(
+            nameof(OnEntityTakeDamage),
+            nameof(canRemove),
+            nameof(OnEntityKill),
+            nameof(OnBookmarkControlStarted),
+            nameof(OnBookmarkControlEnded),
+            nameof(OnEntityMounted),
+            nameof(OnCCTVDirectionChange),
+            nameof(OnVehicleLockDeployed),
+            nameof(OnCCTVMovableBecome),
+            nameof(OnDroneRangeLimit)
+        );
+
+        private DynamicHookSubscriber<ulong> _droneControllerTracker = new DynamicHookSubscriber<ulong>(
+            nameof(OnServerCommand)
+        );
 
         #endregion
 
@@ -82,6 +97,9 @@ namespace Oxide.Plugins
             permission.RegisterPermission(PermissionFetch, this);
             permission.RegisterPermission(PermissionDestroy, this);
             permission.RegisterPermission(PermissionGive, this);
+
+            _megaDroneTracker.UnsubscribeAll();
+            _droneControllerTracker.UnsubscribeAll();
         }
 
         private void OnServerInitialized()
@@ -90,6 +108,28 @@ namespace Oxide.Plugins
 
             if (VerifyDependencies())
                 RefreshAllMegaDrones();
+
+            foreach (var player in BasePlayer.activePlayerList)
+            {
+                var computerStation = player.GetMounted() as ComputerStation;
+                if (computerStation == null)
+                    continue;
+
+                var entity = computerStation.currentlyControllingEnt.Get(serverside: true);
+                var drone = entity as Drone;
+                if (drone != null)
+                {
+                    OnBookmarkControlStarted(computerStation, player, string.Empty, drone);
+                    continue;
+                }
+
+                var camera = entity as CCTV_RC;
+                if (camera != null)
+                {
+                    OnBookmarkControlStarted(computerStation, player, string.Empty, camera);
+                    continue;
+                }
+            }
         }
 
         private void Unload()
@@ -223,6 +263,8 @@ namespace Oxide.Plugins
             if (!IsMegaDrone(drone, out userIdString))
                 return;
 
+            _megaDroneTracker.Remove(drone.net.ID);
+
             if (userIdString != null)
             {
                 var player = BasePlayer.Find(userIdString);
@@ -236,6 +278,14 @@ namespace Oxide.Plugins
             _pluginData.UnregisterOtherDrone(drone);
         }
 
+        private void OnBookmarkControlStarted(ComputerStation station, BasePlayer player, string bookmarkName, Drone drone)
+        {
+            if (!IsMegaDrone(drone))
+                return;
+
+            _droneControllerTracker.Add(player.userID);
+        }
+
         private void OnBookmarkControlStarted(ComputerStation station, BasePlayer player, string bookmarkName, CCTV_RC camera)
         {
             var drone = GetParentMegaDrone(camera);
@@ -243,6 +293,15 @@ namespace Oxide.Plugins
                 return;
 
             CameraMovement.AddToPlayer(player, drone);
+            _droneControllerTracker.Add(player.userID);
+        }
+
+        private void OnBookmarkControlEnded(ComputerStation station, BasePlayer player, Drone drone)
+        {
+            if (drone == null || !IsMegaDrone(drone))
+                return;
+
+            _droneControllerTracker.Remove(player.userID);
         }
 
         private void OnBookmarkControlEnded(ComputerStation station, BasePlayer player, CCTV_RC camera)
@@ -257,6 +316,7 @@ namespace Oxide.Plugins
             drone.StopControl();
             Interface.CallHook("OnBookmarkControlEnded", station, player, drone);
             CameraMovement.RemoveFromPlayer(player);
+            _droneControllerTracker.Remove(player.userID);
         }
 
         private void OnEntityMounted(ComputerStation station, BasePlayer player)
@@ -876,6 +936,7 @@ namespace Oxide.Plugins
         private static void SetupDrone(Drone drone)
         {
             drone.pickup.enabled = false;
+            _pluginInstance._megaDroneTracker.Add(drone.net.ID);
         }
 
         private static int SetRandomIdentifier(IRemoteControllable controllable, string prefix)
@@ -909,8 +970,8 @@ namespace Oxide.Plugins
 
             drone.OwnerID = player.userID;
             var idNumber = SetRandomIdentifier(drone, _pluginConfig.DroneIdentifierPrefix);
-            SetupDrone(drone);
             drone.Spawn();
+            SetupDrone(drone);
 
             _pluginInstance.DroneScaleManager.Call("API_ScaleDrone", drone, MegaDroneScale);
             RunOnEntityBuilt(player, drone, DroneItemId);
@@ -1066,6 +1127,45 @@ namespace Oxide.Plugins
                     continue;
 
                 RefreshMegaDrone(drone);
+            }
+        }
+
+        #endregion
+
+        #region Dynamic Hook Subscriptions
+
+        private class DynamicHookSubscriber<T>
+        {
+            private HashSet<T> _list = new HashSet<T>();
+            private string[] _hookNames;
+
+            public DynamicHookSubscriber(params string[] hookNames)
+            {
+                _hookNames = hookNames;
+            }
+
+            public void Add(T item)
+            {
+                if (_list.Add(item) && _list.Count == 1)
+                    SubscribeAll();
+            }
+
+            public void Remove(T item)
+            {
+                if (_list.Remove(item) && _list.Count == 0)
+                    UnsubscribeAll();
+            }
+
+            public void SubscribeAll()
+            {
+                foreach (var hookName in _hookNames)
+                    _pluginInstance.Subscribe(hookName);
+            }
+
+            public void UnsubscribeAll()
+            {
+                foreach (var hookName in _hookNames)
+                    _pluginInstance.Unsubscribe(hookName);
             }
         }
 
