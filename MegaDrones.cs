@@ -80,6 +80,11 @@ namespace Oxide.Plugins
             nameof(OnDroneRangeLimit)
         );
 
+        private DynamicHookSubscriber<ulong> _droneMounteeTracker = new DynamicHookSubscriber<ulong>(
+            nameof(OnEntityDismounted),
+            nameof(OnPlayerDismountFailed)
+        );
+
         private DynamicHookSubscriber<ulong> _droneControllerTracker = new DynamicHookSubscriber<ulong>(
             nameof(OnServerCommand)
         );
@@ -100,6 +105,7 @@ namespace Oxide.Plugins
 
             _megaDroneTracker.UnsubscribeAll();
             _droneControllerTracker.UnsubscribeAll();
+            _droneMounteeTracker.UnsubscribeAll();
         }
 
         private void OnServerInitialized()
@@ -114,6 +120,8 @@ namespace Oxide.Plugins
                 var computerStation = player.GetMounted() as ComputerStation;
                 if (computerStation == null)
                     continue;
+
+                OnEntityMounted(computerStation, player);
 
                 var entity = computerStation.currentlyControllingEnt.Get(serverside: true);
                 var drone = entity as Drone;
@@ -134,7 +142,11 @@ namespace Oxide.Plugins
 
         private void Unload()
         {
-            CameraMovement.RemoveAll();
+            foreach (var player in BasePlayer.activePlayerList)
+            {
+                CameraMovement.RemoveFromPlayer(player);
+                DismountHelper.RemoveFromPlayer(player);
+            }
 
             _pluginData.Save();
 
@@ -326,6 +338,35 @@ namespace Oxide.Plugins
                 return;
 
             StartControlling(player, station, drone);
+            DismountHelper.AddToPlayer(player, drone);
+            _droneMounteeTracker.Add(player.net.ID);
+        }
+
+        private void OnEntityDismounted(ComputerStation station, BasePlayer player)
+        {
+            if (GetParentMegaDrone(station) == null)
+                return;
+
+            DismountHelper.RemoveFromPlayer(player);
+            _droneMounteeTracker.Remove(player.net.ID);
+        }
+
+        private void OnPlayerDismountFailed(BasePlayer player, ComputerStation station)
+        {
+            if (station == null)
+                return;
+
+            BaseEntity rootEntity;
+            var drone = GetParentMegaDrone(station, out rootEntity);
+            if (drone == null)
+                return;
+
+            var rootTransform = rootEntity.transform;
+            if (Vector3.Dot(Vector3.up, rootTransform.up) > 0.1f)
+                return;
+
+            // Player failed to dismount, and drone is at a bad angle, flip it upright.
+            rootTransform.rotation = Quaternion.Euler(0, rootTransform.rotation.eulerAngles.y, 0);
         }
 
         private bool? OnCCTVDirectionChange(CCTV_RC camera)
@@ -1181,12 +1222,6 @@ namespace Oxide.Plugins
             public static void RemoveFromPlayer(BasePlayer player) =>
                 DestroyImmediate(player.GetComponent<CameraMovement>());
 
-            public static void RemoveAll()
-            {
-                foreach (var player in BasePlayer.activePlayerList)
-                    RemoveFromPlayer(player);
-            }
-
             private Drone _drone;
 
             private CameraMovement SetDrone(Drone drone)
@@ -1206,6 +1241,49 @@ namespace Oxide.Plugins
                     return;
 
                 _drone.UserInput(baseEntity.serverInput, baseEntity);
+            }
+        }
+
+        #endregion
+
+        #region Dismount Helper
+
+        private class DismountHelper : EntityComponent<BasePlayer>
+        {
+            public static void AddToPlayer(BasePlayer player, Drone drone) =>
+                player.GetOrAddComponent<DismountHelper>().Init(drone);
+
+            public static void RemoveFromPlayer(BasePlayer player) =>
+                DestroyImmediate(player.GetComponent<DismountHelper>());
+
+            private Drone _drone;
+
+            private void Init(Drone drone)
+            {
+                _drone = drone;
+            }
+
+            private void Update()
+            {
+                var mountable = baseEntity.GetMounted();
+                if (mountable == null)
+                    return;
+
+                var input = baseEntity.serverInput;
+                if (!input.WasJustPressed(BUTTON.JUMP))
+                    return;
+
+                if (mountable.HasValidDismountPosition(baseEntity))
+                    return;
+
+                var rootEntity = GetRootEntity(_drone);
+                var rootTransform = rootEntity.transform;
+
+                if (Vector3.Dot(Vector3.up, rootTransform.up) > 0.1f)
+                    return;
+
+                // Player failed to dismount, and drone is at a bad angle, flip it upright.
+                rootTransform.rotation = Quaternion.Euler(0, rootTransform.rotation.eulerAngles.y, 0);
             }
         }
 
