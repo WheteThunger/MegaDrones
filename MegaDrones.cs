@@ -301,6 +301,7 @@ namespace Oxide.Plugins
             if (drone == null)
                 return;
 
+            Interface.CallHook("OnBookmarkControlStarted", station, player, drone.GetIdentifier(), drone);
             CameraMovement.AddToPlayer(player, drone);
             _droneControllerTracker.Add(player.userID);
         }
