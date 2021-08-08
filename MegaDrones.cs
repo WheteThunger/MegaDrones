@@ -480,11 +480,29 @@ namespace Oxide.Plugins
             sb.AppendLine(GetMessage(player, Lang.Help));
 
             if (canSpawn)
-                sb.AppendLine(GetMessage(player, Lang.HelpSpawn, cmd));
+            {
+                var spawnSecondsRemaining = _pluginData.GetRemainingCooldownSeconds(player.Id, CooldownType.Spawn);
+                var cooldownMessage = spawnSecondsRemaining > 0
+                    ? GetMessage(player, Lang.HelpRemainingCooldown, FormatTime(spawnSecondsRemaining))
+                    : string.Empty;
+
+                sb.AppendLine(GetMessage(player, Lang.HelpSpawn, cmd, cooldownMessage));
+            }
+
             if (canFetch)
-                sb.AppendLine(GetMessage(player, Lang.HelpFetch, cmd));
+            {
+                var fetchSecondsRemaining = _pluginData.GetRemainingCooldownSeconds(player.Id, CooldownType.Fetch);
+                var cooldownMessage = fetchSecondsRemaining > 0
+                    ? GetMessage(player, Lang.HelpRemainingCooldown, FormatTime(fetchSecondsRemaining))
+                    : string.Empty;
+
+                sb.AppendLine(GetMessage(player, Lang.HelpFetch, cmd, cooldownMessage));
+            }
+
             if (canDestroy)
+            {
                 sb.AppendLine(GetMessage(player, Lang.HelpDestroy, cmd));
+            }
 
             player.Reply(sb.ToString());
         }
@@ -1435,11 +1453,6 @@ namespace Oxide.Plugins
                     cooldownConfig.Init(pluginInstance);
             }
 
-            public float GetCooldownSecondsForPlayer(string userId, CooldownType cooldownType)
-            {
-                return GetCooldownConfigForPlayer(userId).GetSeconds(cooldownType);
-            }
-
             public CooldownConfig GetCooldownConfigForPlayer(string userId)
             {
                 if (CooldownsRequiringPermission.Length == 0)
@@ -1647,6 +1660,7 @@ namespace Oxide.Plugins
             public const string HelpSpawn = "Help.Spawn";
             public const string HelpFetch = "Help.Fetch";
             public const string HelpDestroy = "Help.Destroy";
+            public const string HelpRemainingCooldown = "Help.RemainingCooldown";
         }
 
         protected override void LoadDefaultMessages()
@@ -1674,9 +1688,10 @@ namespace Oxide.Plugins
                 [Lang.InfoDroneDestroyed] = "Your mega drone was destroyed.",
 
                 [Lang.Help] = "<color=#fb4>Mega Drone Commands</color>",
-                [Lang.HelpSpawn] = "<color=#fb4>{0}</color> - Spawn a mega drone",
-                [Lang.HelpFetch] = "<color=#fb4>{0} f | fetch</color> - Fetch your mega drone",
+                [Lang.HelpSpawn] = "<color=#fb4>{0}</color> - Spawn a mega drone{1}",
+                [Lang.HelpFetch] = "<color=#fb4>{0} f | fetch</color> - Fetch your mega drone{1}",
                 [Lang.HelpDestroy] = "<color=#fb4>{0} d | destroy</color> - Destroy your mega drone",
+                [Lang.HelpRemainingCooldown] = " - <color=#f44>{0}</color>",
             }, this, "en");
         }
 

@@ -143,9 +143,10 @@ The definition of "occupied" is when a player is mounted on the computer station
   "Give.Success": "Player '{0}' has been given a mega drone.",
   "Info.DroneDestroyed": "Your mega drone was destroyed.",
   "Help": "<color=#fb4>Mega Drone Commands</color>",
-  "Help.Spawn": "<color=#fb4>{0}</color> - Spawn a mega drone",
-  "Help.Fetch": "<color=#fb4>{0} f | fetch</color> - Fetch your mega drone",
-  "Help.Destroy": "<color=#fb4>{0} d | destroy</color> - Destroy your mega drone"
+  "Help.Spawn": "<color=#fb4>{0}</color> - Spawn a mega drone{1}",
+  "Help.Fetch": "<color=#fb4>{0} f | fetch</color> - Fetch your mega drone{1}",
+  "Help.Destroy": "<color=#fb4>{0} d | destroy</color> - Destroy your mega drone",
+  "Help.RemainingCooldown": " - <color=#f44>{0}</color>"
 }
 ```
 
