@@ -53,12 +53,12 @@ You can add more cooldown profiles in the plugin configuration (`CooldownsRequir
 
 ## Commands
 
-- `megadrone` (or `md`) -- Spawns a mega drone in front of the player.
+- `megadrone` -- Spawns a mega drone in front of the player.
   - Each player may only have one mega drone at a time.
 - `megadrone fetch` -- Teleports the player's mega drone to in front of them.
 - `megadrone destroy` -- Destroys the player's mega drone.
 - `megadrone help` -- Prints help info about the commands the player is allowed to use.
-- `givemegadrone <player>` (or `givemd`) -- Spawns a mega drone in front of the specified player.
+- `givemegadrone <player>` -- Spawns a mega drone in front of the specified player.
   - This command can be run from the server console, allowing this to be used by other plugins such as GUI shop.
   - When this command is run by a player (who has permission), if no target player is specified, the mega drone will be spawned for the player who ran the command.
   - Note: This command does not check for sufficient space, so it can potentially spawn the mega drone inside other objects.
@@ -99,7 +99,26 @@ You can add more cooldown profiles in the plugin configuration (`CooldownsRequir
       "SpawnSeconds": 0,
       "FetchSeconds": 0
     }
-  ]
+  ],
+  "CommandAliases": {
+    "megadrone": [
+      "md"
+    ],
+    "givemegadrone": [
+      "givemd"
+    ]
+  },
+  "SubcommandAliases": {
+    "help": [
+      "h"
+    ],
+    "fetch": [
+      "f"
+    ],
+    "destroy": [
+      "d"
+    ]
+  }
 }
 ```
 
@@ -119,6 +138,12 @@ You can add more cooldown profiles in the plugin configuration (`CooldownsRequir
   - `PermissionSuffix` -- Determines the generated permission of format `megadrones.cooldown.<suffix>`.
   - `SpawnSeconds` -- Works like the option of the same name in `DefaultCooldowns`.
   - `FetchSeconds` -- Works like the option of the same name in `DefaultCooldowns`.
+- `CommandAliases` -- Determines aliases of each command. Each command can have multiple aliases if you want, such as for other languages.
+  - For example, `md` can be used in place of `megadrone`.
+  - To remove all aliases, change the value for a given command to `[]`, like `"megadrone": []`.
+- `SubcommandAliases` -- Determines alises of each subcommand. Each subcommand can have multiple aliases if you want, such as for other languages.
+  - For example `megadrone d` or `md d` can be used in place of `megadrone destroy`.
+  - To remove all aliases, change the value for a given subcommand to `[]`, like `"destroy": []`.
 
 The definition of "occupied" is when a player is mounted on the computer station, or when any player is standing on the drone if using the [Ridable Drones](https://umod.org/plugins/ridable-drones) plugin.
 

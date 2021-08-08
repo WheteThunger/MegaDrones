@@ -33,6 +33,12 @@ namespace Oxide.Plugins
         private const string PermissionGive = "megadrones.give";
         private const string PermissionCooldownPrefix = "megadrones.cooldown";
 
+        private const string CommandName_MegaDrone = "megadrone";
+        private const string CommandName_GiveMegadrone = "givemegadrone";
+        private const string SubCommandName_Help = "help";
+        private const string SubCommandName_Fetch = "fetch";
+        private const string SubCommandName_Destroy = "destroy";
+
         private const float MegaDroneScale = 7f;
 
         private const int DroneItemId = 1588492232;
@@ -104,6 +110,14 @@ namespace Oxide.Plugins
             permission.RegisterPermission(PermissionFetch, this);
             permission.RegisterPermission(PermissionDestroy, this);
             permission.RegisterPermission(PermissionGive, this);
+
+            foreach (var entry in _pluginConfig.CommandAliases)
+            {
+                if (entry.Key == CommandName_MegaDrone)
+                    AddCovalenceCommand(entry.Value, nameof(CommandMegaDrone));
+                else if (entry.Key == CommandName_GiveMegadrone)
+                    AddCovalenceCommand(entry.Value, nameof(CommandGiveMegaDrone));
+            }
 
             _megaDroneTracker.UnsubscribeAll();
             _droneControllerTracker.UnsubscribeAll();
@@ -428,7 +442,7 @@ namespace Oxide.Plugins
 
         #region Commands
 
-        [Command("megadrone")]
+        [Command(CommandName_MegaDrone)]
         private void CommandMegaDrone(IPlayer player, string cmd, string[] args)
         {
             if (player.IsServer)
@@ -441,20 +455,17 @@ namespace Oxide.Plugins
                 return;
             }
 
-            switch (args[0].ToLower())
+            switch (DetermineSubCommand(args[0].ToLower()))
             {
-                case "h":
-                case "help":
+                case SubCommandName_Help:
                     SubCommand_Help(player, cmd);
                     return;
 
-                case "f":
-                case "fetch":
+                case SubCommandName_Fetch:
                     SubCommand_Fetch(player);
                     return;
 
-                case "d":
-                case "destroy":
+                case SubCommandName_Destroy:
                     SubCommand_Destroy(player);
                     return;
 
@@ -587,7 +598,7 @@ namespace Oxide.Plugins
             drone.Kill();
         }
 
-        [Command("givemegadrone", "givemd")]
+        [Command(CommandName_GiveMegadrone)]
         private void CommandGiveMegaDrone(IPlayer player, string cmd, string[] args)
         {
             if (!player.IsServer && !player.HasPermission(PermissionGive))
@@ -1193,6 +1204,18 @@ namespace Oxide.Plugins
             }
         }
 
+        private string DetermineSubCommand(string argLower)
+        {
+            foreach (var entry in _pluginConfig.SubcommandAliases)
+            {
+                var commandLower = entry.Key.ToLowerInvariant();
+                if (commandLower == argLower || entry.Value.Contains(argLower))
+                    return commandLower;
+            }
+
+            return argLower;
+        }
+
         #endregion
 
         #region Dynamic Hook Subscriptions
@@ -1445,6 +1468,21 @@ namespace Oxide.Plugins
                     SpawnSeconds = 0,
                     FetchSeconds = 0,
                 },
+            };
+
+            [JsonProperty("CommandAliases")]
+            public Dictionary<string, string[]> CommandAliases = new Dictionary<string, string[]>()
+            {
+                [CommandName_MegaDrone] = new string[] { "md" },
+                [CommandName_GiveMegadrone] = new string[] { "givemd" },
+            };
+
+            [JsonProperty("SubcommandAliases")]
+            public Dictionary<string, string[]> SubcommandAliases = new Dictionary<string, string[]>()
+            {
+                [SubCommandName_Help] = new string[] { "h" },
+                [SubCommandName_Fetch] = new string[] { "f" },
+                [SubCommandName_Destroy] = new string[] { "d" },
             };
 
             public void Init(MegaDrones pluginInstance)
