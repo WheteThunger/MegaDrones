@@ -874,6 +874,9 @@ namespace Oxide.Plugins
             station.OwnerID = drone.OwnerID;
             station.isMobile = true;
 
+            if (station.IsFullySpawned() && !BaseMountable.MobileMountables.Contains(station))
+                BaseMountable.MobileMountables.Add(station);
+
             foreach (var collider in station.GetComponents<BoxCollider>())
             {
                 // Removing the box collider helps with mounting and dismounting at an angle
