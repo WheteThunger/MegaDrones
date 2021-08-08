@@ -31,6 +31,7 @@ namespace Oxide.Plugins
         private const string PermissionFetch = "megadrones.fetch";
         private const string PermissionDestroy = "megadrones.destroy";
         private const string PermissionGive = "megadrones.give";
+        private const string PermissionCooldownPrefix = "megadrones.cooldown";
 
         private const float MegaDroneScale = 7f;
 
@@ -96,6 +97,7 @@ namespace Oxide.Plugins
         private void Init()
         {
             _pluginInstance = this;
+            _pluginConfig.Init(this);
             _pluginData = StoredData.Load();
 
             permission.RegisterPermission(PermissionSpawn, this);
@@ -427,7 +429,7 @@ namespace Oxide.Plugins
         #region Commands
 
         [Command("megadrone")]
-        private void CommandMegdaDrone(IPlayer player, string cmd, string[] args)
+        private void CommandMegaDrone(IPlayer player, string cmd, string[] args)
         {
             if (player.IsServer)
                 return;
@@ -763,6 +765,9 @@ namespace Oxide.Plugins
 
         private static BaseEntity GetRootEntity(Drone drone) =>
             _pluginInstance.DroneScaleManager?.Call("API_GetRootEntity", drone) as BaseEntity;
+
+        private static string GetCooldownPermission(string permissionSuffix) =>
+            $"{PermissionCooldownPrefix}.{permissionSuffix}";
 
         public static bool IsMegaDrone(Drone drone) =>
             _pluginData.IsMegaDrone(drone);
@@ -1317,13 +1322,13 @@ namespace Oxide.Plugins
                 if (!Cooldowns.GetCooldownMap(cooldownType).TryGetValue(userId, out cooldownStart))
                     return 0;
 
-                var cooldownSeconds = _pluginConfig.Cooldowns.GetSeconds(cooldownType);
+                var cooldownSeconds = _pluginConfig.GetCooldownConfigForPlayer(userId).GetSeconds(cooldownType);
                 return cooldownStart + cooldownSeconds - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             }
 
             public void StartCooldown(string userId, CooldownType cooldownType)
             {
-                if (_pluginConfig.Cooldowns.GetSeconds(cooldownType) <= 0)
+                if (_pluginConfig.GetCooldownConfigForPlayer(userId).GetSeconds(cooldownType) <= 0)
                     return;
 
                 Cooldowns.GetCooldownMap(cooldownType)[userId] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -1388,17 +1393,91 @@ namespace Oxide.Plugins
             [JsonProperty("DismountPlayersOnFetch")]
             public bool DismountPlayersOnFetch = true;
 
-            [JsonProperty("Cooldowns")]
-            public CooldownConfig Cooldowns = new CooldownConfig();
+            [JsonProperty("DefaultCooldowns")]
+            public CooldownConfig DefaultCooldowns = new CooldownConfig()
+            {
+                SpawnSeconds = 3600,
+                FetchSeconds = 600,
+            };
+
+            [JsonProperty("CooldownsRequiringPermission")]
+            public CooldownConfig[] CooldownsRequiringPermission = new CooldownConfig[]
+            {
+                new CooldownConfig()
+                {
+                    PermissionSuffix = "long",
+                    SpawnSeconds = 86400,
+                    FetchSeconds = 3600,
+                },
+                new CooldownConfig()
+                {
+                    PermissionSuffix = "medium",
+                    SpawnSeconds = 3600,
+                    FetchSeconds = 600,
+                },
+                new CooldownConfig()
+                {
+                    PermissionSuffix = "short",
+                    SpawnSeconds = 600,
+                    FetchSeconds = 60,
+                },
+                new CooldownConfig()
+                {
+                    PermissionSuffix = "none",
+                    SpawnSeconds = 0,
+                    FetchSeconds = 0,
+                },
+            };
+
+            public void Init(MegaDrones pluginInstance)
+            {
+                foreach (var cooldownConfig in CooldownsRequiringPermission)
+                    cooldownConfig.Init(pluginInstance);
+            }
+
+            public float GetCooldownSecondsForPlayer(string userId, CooldownType cooldownType)
+            {
+                return GetCooldownConfigForPlayer(userId).GetSeconds(cooldownType);
+            }
+
+            public CooldownConfig GetCooldownConfigForPlayer(string userId)
+            {
+                if (CooldownsRequiringPermission.Length == 0)
+                    return DefaultCooldowns;
+
+                for (var i = CooldownsRequiringPermission.Length - 1; i >= 0; i--)
+                {
+                    var config = CooldownsRequiringPermission[i];
+                    if (config.Permission != null && _pluginInstance.permission.UserHasPermission(userId, config.Permission))
+                        return config;
+                }
+
+                return DefaultCooldowns;
+            }
         }
 
         private class CooldownConfig
         {
+            [JsonProperty("PermissionSuffix", DefaultValueHandling = DefaultValueHandling.Ignore)]
+            public string PermissionSuffix;
+
             [JsonProperty("SpawnSeconds")]
-            public long SpawnSeconds = 3600;
+            public long SpawnSeconds;
 
             [JsonProperty("FetchSeconds")]
-            public long FetchSeconds = 600;
+            public long FetchSeconds;
+
+            [JsonIgnore]
+            public string Permission;
+
+            public void Init(MegaDrones pluginInstance)
+            {
+                if (string.IsNullOrWhiteSpace(PermissionSuffix))
+                    return;
+
+                Permission = GetCooldownPermission(PermissionSuffix);
+                pluginInstance.permission.RegisterPermission(Permission, pluginInstance);
+            }
 
             public long GetSeconds(CooldownType cooldownType)
             {
