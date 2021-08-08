@@ -426,7 +426,7 @@ namespace Oxide.Plugins
 
         #region Commands
 
-        [Command("megadrone", "md")]
+        [Command("megadrone")]
         private void CommandMegdaDrone(IPlayer player, string cmd, string[] args)
         {
             if (player.IsServer)
