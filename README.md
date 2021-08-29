@@ -71,6 +71,7 @@ You can add more cooldown profiles in the plugin configuration (`CooldownsRequir
 ```json
 {
   "AutoMount": true,
+  "AutoFetch": false,
   "DroneIdentifierPrefix": "MD",
   "CamIdentifierPrefix": "MDCam",
   "CanSpawnWhileBuildingBlocked": false,
@@ -128,6 +129,7 @@ You can add more cooldown profiles in the plugin configuration (`CooldownsRequir
 ```
 
 - `AutoMount` (`true` or `false`) -- While `true`, spawning or fetching a mega drone will automatically mount the player. Note: This does not apply for drones spawned via the `givemegadrone` command which are never auto mounted.
+- `AutoFetch` (`true` or `false`) -- While `true`, running the `megadrone` command will automatically fetch your existing mega drone if you already have one. This will only happen if you have the `megadrones.fetch` permission and do not have an active `Fetch` cooldown.
 - `DroneIdentifierPrefix` -- Identifier prefix to give mega drones. A random number between 1 and 9999 will be appended to this.
 - `CamIdentifierPrefix` -- Identifier prefix to give the camera attached to each mega drone. A random number between 1 and 9999 will be appended to this.
   - The same random number will be used for both the drone and camera.

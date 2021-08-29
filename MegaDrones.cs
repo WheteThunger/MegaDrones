@@ -14,7 +14,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Mega Drones", "WhiteThunder", "0.1.0")]
+    [Info("Mega Drones", "WhiteThunder", "0.2.0")]
     [Description("Allows players to spawn large drones with computer stations attached to them.")]
     internal class MegaDrones : CovalencePlugin
     {
@@ -567,15 +567,37 @@ namespace Oxide.Plugins
             Quaternion spawnRotation;
 
             if (!VerifyCanInteract(player)
-                || !VerifyNotMounted(player)
-                || !VerifyHasNoDrone(player, cmd)
-                || !VerifyOffCooldown(player, CooldownType.Spawn)
+                || !VerifyNotMounted(player))
+                return;
+
+            var drone = FindPlayerDrone(player.Id);
+            if (drone != null)
+            {
+                var hasFetchPermission = permission.UserHasPermission(player.Id, PermissionFetch);
+
+                if (_pluginConfig.AutoFetch && hasFetchPermission)
+                {
+                    FetchInternal(player, drone);
+                }
+                else
+                {
+                    var messages = new List<string> { GetMessage(player, Lang.SpawnErrorDroneAlreadyExists) };
+                    if (hasFetchPermission)
+                        messages.Add(GetMessage(player, Lang.SpawnErrorDroneAlreadyExistsHelp, cmd));
+
+                    player.Reply(string.Join(" ", messages));
+                }
+
+                return;
+            }
+
+            if (!VerifyOffCooldown(player, CooldownType.Spawn)
                 || !_pluginConfig.CanSpawnBuildingBlocked && !VerifyCanBuild(player)
                 || !VerifySufficientSpace(player, out spawnPosition, out spawnRotation)
                 || SpawnMegaDroneWasBlocked(basePlayer))
                 return;
 
-            var drone = SpawnMegaDrone(basePlayer);
+            drone = SpawnMegaDrone(basePlayer);
             if (drone != null)
             {
                 ReplyToPlayer(player, Lang.SpawnSuccess);
@@ -585,21 +607,13 @@ namespace Oxide.Plugins
             }
         }
 
-        private void SubCommand_Fetch(IPlayer player)
+        private void FetchInternal(IPlayer player, Drone drone)
         {
-            if (!VerifyPermission(player, PermissionFetch))
-                return;
-
-            Drone drone;
-
             var basePlayer = player.Object as BasePlayer;
             Vector3 fetchPosition;
             Quaternion fetchRotation;
 
-            if (!VerifyCanInteract(player)
-                || !VerifyNotMounted(player)
-                || !VerifyHasDrone(player, out drone)
-                || !VerifyOffCooldown(player, CooldownType.Fetch)
+            if (!VerifyOffCooldown(player, CooldownType.Fetch)
                 || !_pluginConfig.CanFetchOccupied && !VerifyDroneNotOccupied(player, drone)
                 || !_pluginConfig.CanFetchBuildingBlocked && !VerifyCanBuild(player)
                 || !VerifySufficientSpace(player, out fetchPosition, out fetchRotation)
@@ -623,6 +637,21 @@ namespace Oxide.Plugins
 
             if (_pluginConfig.AutoMount)
                 TryMountPlayer(drone, basePlayer);
+        }
+
+        private void SubCommand_Fetch(IPlayer player)
+        {
+            if (!VerifyPermission(player, PermissionFetch))
+                return;
+
+            Drone drone;
+
+            if (!VerifyCanInteract(player)
+                || !VerifyNotMounted(player)
+                || !VerifyHasDrone(player, out drone))
+                return;
+
+            FetchInternal(player, drone);
         }
 
         private void SubCommand_Destroy(IPlayer player)
@@ -1464,6 +1493,9 @@ namespace Oxide.Plugins
         {
             [JsonProperty("AutoMount")]
             public bool AutoMount = true;
+
+            [JsonProperty("AutoFetch")]
+            public bool AutoFetch = false;
 
             [JsonProperty("DroneIdentifierPrefix")]
             public string DroneIdentifierPrefix = "MD";
