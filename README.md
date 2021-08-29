@@ -78,6 +78,7 @@ You can add more cooldown profiles in the plugin configuration (`CooldownsRequir
   "CanFetchWhileOccupied": false,
   "CanDestroyWhileOccupied": false,
   "DismountPlayersOnFetch": true,
+  "DestroyOnDisconnect": false,
   "DefaultCooldowns": {
     "SpawnSeconds": 3600,
     "FetchSeconds": 600
@@ -135,6 +136,7 @@ You can add more cooldown profiles in the plugin configuration (`CooldownsRequir
 - `CanFetchWhileOccupied` (`true` or `false`) -- While `true`, players can fetch their mega drone while it is occupied.
 - `CanDestroyWhileOccupied` (`true` or `false`) -- While `true`, players can destroy their existing mega drone while it is occupied.
 - `DismountPlayersOnFetch` (`true` or `false`) -- While `true`, fetching a mega drone will dismount any players currently on it. Only applies if `CanFetchWhileOccupied` is `true`.
+- `DestroyOnDisconnect` (`true` or `false`) -- While `true`, disconnecting from the server will automatically destroy your mega drone. If the mega drone is mounted at that time, it will be destroyed when fully dismounted.
 - `DefaultCooldowns` -- Default cooldowns, for players who do not have permission to any entries in `CooldownsRequiringPermission`.
   - `SpawnSeconds` -- The number of seconds the player must wait after spawning a mega drone, before they can spawn one again.
     - Note: Each player can have only one mega drone at a time, so reducing a player's cooldown won't allow them to have multiple at once.

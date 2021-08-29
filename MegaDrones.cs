@@ -74,18 +74,7 @@ namespace Oxide.Plugins
             + Layers.Mask.Construction
             + Layers.Mask.Tree;
 
-        private DynamicHookSubscriber<uint> _megaDroneTracker = new DynamicHookSubscriber<uint>(
-            nameof(OnEntityTakeDamage),
-            nameof(canRemove),
-            nameof(OnEntityKill),
-            nameof(OnBookmarkControlStarted),
-            nameof(OnBookmarkControlEnded),
-            nameof(OnEntityMounted),
-            nameof(OnCCTVDirectionChange),
-            nameof(OnVehicleLockDeployed),
-            nameof(OnCCTVMovableBecome),
-            nameof(OnDroneRangeLimit)
-        );
+        private DynamicHookSubscriber<uint> _megaDroneTracker;
 
         private DynamicHookSubscriber<ulong> _droneMounteeTracker = new DynamicHookSubscriber<ulong>(
             nameof(OnEntityDismounted),
@@ -119,7 +108,26 @@ namespace Oxide.Plugins
                     AddCovalenceCommand(entry.Value, nameof(CommandGiveMegaDrone));
             }
 
+            var megaDroneDynamicHookNames = new List<string>()
+            {
+                nameof(OnEntityTakeDamage),
+                nameof(canRemove),
+                nameof(OnEntityKill),
+                nameof(OnBookmarkControlStarted),
+                nameof(OnBookmarkControlEnded),
+                nameof(OnEntityMounted),
+                nameof(OnCCTVDirectionChange),
+                nameof(OnVehicleLockDeployed),
+                nameof(OnCCTVMovableBecome),
+                nameof(OnDroneRangeLimit),
+            };
+
+            if (_pluginConfig.DestroyOnDisconnect)
+                megaDroneDynamicHookNames.Add(nameof(OnPlayerDisconnected));
+
+            _megaDroneTracker = new DynamicHookSubscriber<uint>(megaDroneDynamicHookNames.ToArray());
             _megaDroneTracker.UnsubscribeAll();
+
             _droneControllerTracker.UnsubscribeAll();
             _droneMounteeTracker.UnsubscribeAll();
         }
@@ -189,6 +197,25 @@ namespace Oxide.Plugins
             {
                 RegisterWithVehicleDeployedLocks();
             }
+        }
+
+        private void OnPlayerDisconnected(BasePlayer player)
+        {
+            if (player == null)
+                return;
+
+            var drone = FindPlayerDrone(player.UserIDString);
+            if (drone == null)
+                return;
+
+            NextTick(() =>
+            {
+                if (drone == null)
+                    return;
+
+                if (GetMountedPlayer(drone) == null)
+                    drone.Kill();
+            });
         }
 
         private void OnServerCommand(ConsoleSystem.Arg arg)
@@ -357,10 +384,22 @@ namespace Oxide.Plugins
 
         private void OnEntityDismounted(ComputerStation station, BasePlayer player)
         {
-            if (GetParentMegaDrone(station) == null)
+            var drone = GetParentMegaDrone(station);
+            if (drone == null)
                 return;
 
             _droneMounteeTracker.Remove(player.net.ID);
+
+            if (_pluginConfig.DestroyOnDisconnect
+                // Can skip if the owner dismounted since the disconnect hook will handle that case.
+                && player.userID != drone.OwnerID
+                // Make sure it's the player's personal drone, not one given by givemegadrone or via API.
+                && IsPlayerMegaDrone(drone))
+            {
+                var ownerPlayer = BasePlayer.FindByID(drone.OwnerID);
+                if (ownerPlayer == null || !ownerPlayer.IsConnected)
+                    drone.Kill();
+            }
         }
 
         private void OnPlayerDismountFailed(BasePlayer player, ComputerStation station)
@@ -652,7 +691,7 @@ namespace Oxide.Plugins
 
         private bool VerifyHasNoDrone(IPlayer player, string cmd)
         {
-            if (FindPlayerDrone(player) == null)
+            if (FindPlayerDrone(player.Id) == null)
                 return true;
 
             var messages = new List<string> { GetMessage(player, Lang.SpawnErrorDroneAlreadyExists) };
@@ -665,7 +704,7 @@ namespace Oxide.Plugins
 
         private bool VerifyHasDrone(IPlayer player, out Drone drone)
         {
-            drone = FindPlayerDrone(player);
+            drone = FindPlayerDrone(player.Id);
             if (drone != null)
                 return true;
 
@@ -807,6 +846,12 @@ namespace Oxide.Plugins
 
         public static bool IsMegaDrone(Drone drone, out string userIdString) =>
             _pluginData.IsMegaDrone(drone, out userIdString);
+
+        public static bool IsPlayerMegaDrone(Drone drone)
+        {
+            string userIdString;
+            return _pluginData.IsMegaDrone(drone, out userIdString) && userIdString != null;
+        }
 
         private static Drone GetParentMegaDrone(BaseEntity entity, out BaseEntity rootEntity)
         {
@@ -1128,15 +1173,15 @@ namespace Oxide.Plugins
             }
         }
 
-        private static Drone FindPlayerDrone(IPlayer player)
+        private static Drone FindPlayerDrone(string userId)
         {
             uint droneId;
-            if (!_pluginData.PlayerDrones.TryGetValue(player.Id, out droneId))
+            if (!_pluginData.PlayerDrones.TryGetValue(userId, out droneId))
                 return null;
 
             var drone = BaseNetworkable.serverEntities.Find(droneId) as Drone;
             if (drone == null)
-                _pluginData.UnregisterPlayerDrone(player.Id);
+                _pluginData.UnregisterPlayerDrone(userId);
 
             return drone;
         }
@@ -1440,6 +1485,9 @@ namespace Oxide.Plugins
 
             [JsonProperty("DismountPlayersOnFetch")]
             public bool DismountPlayersOnFetch = true;
+
+            [JsonProperty("DestroyOnDisconnect")]
+            public bool DestroyOnDisconnect = false;
 
             [JsonProperty("DefaultCooldowns")]
             public CooldownConfig DefaultCooldowns = new CooldownConfig()
