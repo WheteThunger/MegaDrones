@@ -540,7 +540,9 @@ namespace Oxide.Plugins
             if (drone != null)
             {
                 ReplyToPlayer(player, Lang.SpawnSuccess);
-                TryMountPlayer(drone, basePlayer);
+
+                if (_pluginConfig.AutoMount)
+                    TryMountPlayer(drone, basePlayer);
             }
         }
 
@@ -579,7 +581,9 @@ namespace Oxide.Plugins
 
             _pluginData.StartCooldown(player.Id, CooldownType.Fetch);
             ReplyToPlayer(player, Lang.SpawnSuccess);
-            TryMountPlayer(drone, basePlayer);
+
+            if (_pluginConfig.AutoMount)
+                TryMountPlayer(drone, basePlayer);
         }
 
         private void SubCommand_Destroy(IPlayer player)
@@ -1413,6 +1417,9 @@ namespace Oxide.Plugins
 
         private class Configuration : SerializableConfiguration
         {
+            [JsonProperty("AutoMount")]
+            public bool AutoMount = true;
+
             [JsonProperty("DroneIdentifierPrefix")]
             public string DroneIdentifierPrefix = "MD";
 
