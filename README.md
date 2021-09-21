@@ -14,6 +14,12 @@
 - When a player mounts the computer station, they will automatically start controlling the drone
 - The computer station automatically has saved identifiers for the drone and the attached camera
 
+## Plugin compatibility
+
+Compatible with all drone plugins by WhiteThunder. Note that attachments such as stashes, turrets, boomboxes and seats **cannot** be deployed onto mega drones specifically.
+
+**Not** compatible with [Drone Pilot](https://umod.org/plugins/drone-pilot).
+
 ## Required plugins
 
 The following plugins are required, but they work out-of-the-box, so no permissions or configuration are needed.
