@@ -1821,6 +1821,35 @@ namespace Oxide.Plugins
                 [Lang.HelpDestroy] = "<color=#fb4>{0} d | destroy</color> - Destroy your mega drone",
                 [Lang.HelpRemainingCooldown] = " - <color=#f44>{0}</color>",
             }, this, "en");
+            //Added Brazilian Portuguese translation
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                [Lang.ErrorNoPermission] = "Você não tem permissão para fazer isso.",
+                [Lang.ErrorBuildingBlocked] = "Erro: Não é possível fazer isso enquanto o prédio está bloqueado.",
+                [Lang.ErrorDroneNotFound] = "Erro: você precisa de um mega drone para fazer isso.",
+                [Lang.ErrorDroneOccupied] = "Erro: Não é possível fazer isso enquanto o mega drone está ocupado.",
+                [Lang.ErrorCooldown] = "Aguarde <color=#f44>{0}</color> e tente novamente.",
+                [Lang.ErrorGenericRestricted] = "Erro: você não pode fazer isso agora.",
+                [Lang.ErrorUnknownCommand] = "Erro: comando não reconhecido <color=#fb4>{0}</color>.",
+                [Lang.ErrorMounted] = "Erro: não é possível fazer isso enquanto está montado.",
+                [Lang.ErrorInsufficientSpace] = "Erro: espaço insuficiente.",
+
+                [Lang.SpawnSuccess] = "Aqui está o seu mega drone.",
+                [Lang.SpawnErrorDroneAlreadyExists] = "Erro: você já tem um mega drone.",
+                [Lang.SpawnErrorDroneAlreadyExistsHelp] = "Experimente <color=#fb4>{0} fetch</color> ou <color=#fb4>{0} help</color>.",
+
+                [Lang.GiveErrorSyntax] = "Syntax: {0} <player>",
+                [Lang.GiveErrorPlayerNotFound] = "Erro: Player '{0}' não encontrado.",
+                [Lang.GiveSuccess] = "O jogador '{0}' recebeu um mega drone.",
+
+                [Lang.InfoDroneDestroyed] = "Seu mega drone foi destruído.",
+
+                [Lang.Help] = "<color=#fb4>Comandos Mega Drone</color>",
+                [Lang.HelpSpawn] = "<color=#fb4>{0}</color> - Gerar um mega drone{1}",
+                [Lang.HelpFetch] = "<color=#fb4>{0} f | fetch</color> - Pegue seu mega drone{1}",
+                [Lang.HelpDestroy] = "<color=#fb4>{0} d | destroy</color> - Destrua seu mega drone",
+                [Lang.HelpRemainingCooldown] = " - <color=#f44>{0}</color>",
+            }, this, "pt-BR");
         }
 
         #endregion
