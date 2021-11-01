@@ -14,7 +14,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Mega Drones", "WhiteThunder", "0.2.1")]
+    [Info("Mega Drones", "WhiteThunder", "0.2.2")]
     [Description("Allows players to spawn large drones with computer stations attached to them.")]
     internal class MegaDrones : CovalencePlugin
     {
@@ -980,10 +980,10 @@ namespace Oxide.Plugins
             RemoveGroundWatch(station);
             station.pickup.enabled = false;
             station.OwnerID = drone.OwnerID;
-            station.isMobile = true;
+            station.needsVehicleTick = true;
 
-            if (station.IsFullySpawned() && !BaseMountable.MobileMountables.Contains(station))
-                BaseMountable.MobileMountables.Add(station);
+            if (station.IsFullySpawned() && !BaseMountable.FixedUpdateMountables.Contains(station))
+                BaseMountable.FixedUpdateMountables.Add(station);
 
             foreach (var collider in station.GetComponents<BoxCollider>())
             {
