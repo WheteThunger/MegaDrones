@@ -14,7 +14,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Mega Drones", "WhiteThunder", "0.2.3")]
+    [Info("Mega Drones", "WhiteThunder", "0.2.4")]
     [Description("Allows players to spawn large drones with computer stations attached to them.")]
     internal class MegaDrones : CovalencePlugin
     {
@@ -1191,7 +1191,7 @@ namespace Oxide.Plugins
             var rootEntity = GetRootEntity(drone);
             var station = GetComputerStation(drone);
 
-            if (station.IsMounted())
+            if (station.AnyMounted())
                 station.DismountAllPlayers();
 
             if (rootEntity != null)
