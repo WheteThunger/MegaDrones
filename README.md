@@ -1,3 +1,7 @@
+## Video Tutorial
+
+[![Video Tutorial](https://img.youtube.com/vi/1qwImfmknbM/maxresdefault.jpg)](https://www.youtube.com/watch?v=1qwImfmknbM)
+
 ## Features
 
 - Allows players to spawn large drones with computer stations attached to them
