@@ -14,7 +14,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Mega Drones", "WhiteThunder", "0.2.4")]
+    [Info("Mega Drones", "WhiteThunder", "0.2.5")]
     [Description("Allows players to spawn large drones with computer stations attached to them.")]
     internal class MegaDrones : CovalencePlugin
     {
@@ -366,7 +366,10 @@ namespace Oxide.Plugins
             if (drone == null)
                 return;
 
-            drone.StopControl();
+            if (drone.ControllingViewerId.HasValue)
+            {
+                drone.StopControl(drone.ControllingViewerId.Value);
+            }
             Interface.CallHook("OnBookmarkControlEnded", station, player, drone);
             CameraMovement.RemoveFromPlayer(player);
             _droneControllerTracker.Remove(player.userID);
@@ -943,9 +946,11 @@ namespace Oxide.Plugins
                 return;
 
             station.currentlyControllingEnt.uid = entity.net.ID;
+            station.SetFlag(BaseEntity.Flags.Reserved2, true);
             station.SendNetworkUpdateImmediate();
             station.SendControlBookmarks(player);
-            controllable.InitializeControl(player);
+            var viewerId = new CameraViewerId(player.userID, 0);
+            controllable.InitializeControl(viewerId);
             station.InvokeRepeating(station.ControlCheck, 0, 0);
             Interface.CallHook("OnBookmarkControlStarted", station, player, controllable.GetIdentifier(), entity);
         }
@@ -1108,7 +1113,10 @@ namespace Oxide.Plugins
             if (entity == null)
                 return;
 
-            station.controlBookmarks[identifier] = entity.net.ID;
+            if (!station.controlBookmarks.Contains(identifier))
+            {
+                station.controlBookmarks.Add(identifier);
+            }
         }
 
         private static Drone SpawnMegaDrone(BasePlayer player, bool shouldTrack = true)
@@ -1353,7 +1361,7 @@ namespace Oxide.Plugins
             private CameraMovement SetDrone(Drone drone)
             {
                 _drone = drone;
-                _drone.InitializeControl(baseEntity);
+                _drone.InitializeControl(new CameraViewerId(baseEntity.userID, 0));
                 return this;
             }
 
@@ -1366,7 +1374,7 @@ namespace Oxide.Plugins
                 if (baseEntity.lastTickTime < Time.time)
                     return;
 
-                _drone.UserInput(baseEntity.serverInput, baseEntity);
+                _drone.UserInput(baseEntity.serverInput, new CameraViewerId(baseEntity.userID, 0));
             }
         }
 
