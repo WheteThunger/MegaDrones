@@ -43,7 +43,6 @@ The following plugins are required, but they work out-of-the-box, so no permissi
 - [Ridable Drones](https://umod.org/plugins/ridable-drones) -- Allows players to ride RC drones by standing on them. This essentially allows mega drones to have passengers.
 - [Vehicle Deployed Locks](https://umod.org/plugins/vehicle-deployed-locks) -- Allows players with permissions to deploy code locks and key locks to mega drones.
 - [Drone Hover](https://umod.org/plugins/drone-hover) -- Allows RC drones to hover in place while not being controlled. This allows you to dismount a mega drone computer station in the air without it falling to the ground. Combined with Ridable Drones, this allows you to dismount the computer station while the drone is moving, without falling off, while the drone glides to a stop midair.
-- [Drone Effects](https://umod.org/plugins/drone-effects) -- Adds collision effects to RC drones.
 - [Drone Lights](https://umod.org/plugins/drone-lights) -- Adds controllable search lights to RC drones.
 
 ## Permissions
@@ -193,14 +192,6 @@ The definition of "occupied" is when a player is mounted on the computer station
   "Help.RemainingCooldown": " - <color=#f44>{0}</color>"
 }
 ```
-
-## FAQ
-
-#### How do I control the drone?
-
-Controls are `W`/`A`/`S`/`D` to move, `shift` (sprint) to go up, `ctrl` (duck) to go down, and mouse to steer.
-
-Note: If you are unable to steer the drone, that is likely because you have a plugin drawing a UI that is grabbing the mouse cursor. For example, the Movable CCTV plugin previously caused this and was patched in March 2021.
 
 ## Developer API
 
