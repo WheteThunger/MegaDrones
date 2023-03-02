@@ -12,6 +12,12 @@
 - One mega drone per player
 - Configurable cooldowns based on permission
 
+## Known issues
+
+Since the March 2023 Rust update, drones now sway in the wind, but attached entities do not sway. This causes undesirable visuals to players observing a drone that is being controlled. There is no known fix at this time.
+
+Additionally, it's no longer feasible to stand on drones, which means you should not attempt to dismount a Mega Drone in the air.
+
 ### How it works
 
 - Spawning the drone will automatically cause the player to mount the attached computer station
