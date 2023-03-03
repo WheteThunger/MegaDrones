@@ -18,7 +18,7 @@ Since the March 2023 Rust update, drones now sway in the wind, but attached enti
 
 Additionally, it's no longer feasible to stand on drones, which means you should not attempt to dismount a Mega Drone in the air.
 
-### How it works
+## How it works
 
 - Spawning the drone will automatically cause the player to mount the attached computer station
 - When a player mounts the computer station, they will automatically start controlling the drone
