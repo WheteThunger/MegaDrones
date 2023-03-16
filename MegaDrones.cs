@@ -61,6 +61,9 @@ namespace Oxide.Plugins
 
         private static readonly Vector3 DroneExtents = new Vector3(0.75f, 0.1f, 0.75f) * MegaDroneScale / 2;
 
+        private readonly object True = true;
+        private readonly object False = false;
+
         // These layers are used to preventing spawning inside walls or players.
         private const int BoxcastLayers = Layers.Mask.Default
             + Layers.Mask.Deployed
@@ -275,18 +278,19 @@ namespace Oxide.Plugins
         }
 
         // Redirect damage from the computer station to the drone.
-        private bool? OnEntityTakeDamage(ComputerStation station, HitInfo hitInfo)
+        private object OnEntityTakeDamage(ComputerStation station, HitInfo hitInfo)
         {
             return HandleOnEntityTakeDamage(station, hitInfo);
         }
 
         // Redirect damage from the camera to the drone.
-        private bool? OnEntityTakeDamage(CCTV_RC camera, HitInfo hitInfo)
+        private object OnEntityTakeDamage(CCTV_RC camera, HitInfo hitInfo)
         {
             return HandleOnEntityTakeDamage(camera, hitInfo);
         }
 
-        private bool? HandleOnEntityTakeDamage(BaseEntity entity, HitInfo hitInfo)
+        // Not a hook, just a helper.
+        private object HandleOnEntityTakeDamage(BaseEntity entity, HitInfo hitInfo)
         {
             var drone = GetParentMegaDrone(entity);
             if (drone == null)
@@ -296,37 +300,31 @@ namespace Oxide.Plugins
             HitNotify(drone, hitInfo);
 
             // Return true (standard) to cancel default behavior (to prevent damage).
-            return true;
+            return True;
         }
 
         // This hook is exposed by plugin: Remover Tool (RemoverTool).
-        private bool? canRemove(BasePlayer player, Drone drone)
+        private object canRemove(BasePlayer player, Drone drone)
         {
-            if (IsMegaDrone(drone))
-                return false;
-
-            return null;
+            return IsMegaDrone(drone) ? False : null;
         }
 
         // This hook is exposed by plugin: Remover Tool (RemoverTool).
-        private bool? canRemove(BasePlayer player, ComputerStation station)
+        private object canRemove(BasePlayer player, ComputerStation station)
         {
             return HandleCanRemove(station);
         }
 
         // This hook is exposed by plugin: Remover Tool (RemoverTool).
-        private bool? canRemove(BasePlayer player, CCTV_RC camera)
+        private object canRemove(BasePlayer player, CCTV_RC camera)
         {
             return HandleCanRemove(camera);
         }
 
         // Not a hook, just a helper.
-        private bool? HandleCanRemove(BaseEntity entity)
+        private object HandleCanRemove(BaseEntity entity)
         {
-            if (GetParentMegaDrone(entity) != null)
-                return false;
-
-            return null;
+            return GetParentMegaDrone(entity) != null ? False : null;
         }
 
         private void OnEntityKill(Drone drone)
@@ -448,12 +446,9 @@ namespace Oxide.Plugins
             rootTransform.rotation = Quaternion.Euler(0, rootTransform.rotation.eulerAngles.y, 0);
         }
 
-        private bool? OnCCTVDirectionChange(CCTV_RC camera)
+        private object OnCCTVDirectionChange(CCTV_RC camera)
         {
-            if (GetParentMegaDrone(camera) != null)
-                return false;
-
-            return null;
+            return GetParentMegaDrone(camera) != null ? False : null;
         }
 
         // This hook is exposed by plugin: Vehicle Deployed Locks (VehicleDeployedLocks).
@@ -475,22 +470,16 @@ namespace Oxide.Plugins
             return IsMegaDrone(drone) ? Name : null;
         }
 
-        // This hook is exposed by plugin: Movable CCTV (MovableCCTCV)
-        private bool? OnCCTVMovableBecome(CCTV_RC camera)
+        // This hook is exposed by plugin: Movable CCTV (MovableCCTV)
+        private object OnCCTVMovableBecome(CCTV_RC camera)
         {
-            if (GetParentMegaDrone(camera) != null)
-                return false;
-
-            return null;
+            return GetParentMegaDrone(camera) != null ? False : null;
         }
 
         // This hook is exposed by plugin: Limited Drone Range (LimitedDroneRange).
-        private bool? OnDroneRangeLimit(Drone drone)
+        private object OnDroneRangeLimit(Drone drone)
         {
-            if (IsMegaDrone(drone))
-                return false;
-
-            return null;
+            return IsMegaDrone(drone) ? False : null;
         }
 
         #endregion
