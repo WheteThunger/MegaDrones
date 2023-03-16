@@ -486,7 +486,8 @@ namespace Oxide.Plugins
 
         #region API
 
-        private Drone API_SpawnMegaDrone(BasePlayer player)
+        [HookMethod(nameof(API_SpawnMegaDrone))]
+        public Drone API_SpawnMegaDrone(BasePlayer player)
         {
             if (SpawnMegaDroneWasBlocked(player))
                 return null;
