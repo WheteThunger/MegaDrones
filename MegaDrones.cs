@@ -1,6 +1,5 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Serialization;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
@@ -23,9 +22,8 @@ namespace Oxide.Plugins
         [PluginReference]
         private readonly Plugin DroneScaleManager, EntityScaleManager, VehicleDeployedLocks;
 
-        private static MegaDrones _pluginInstance;
-        private static StoredData _pluginData;
-        private static Configuration _pluginConfig;
+        private Configuration _config;
+        private StoredData _data;
 
         private const string PermissionSpawn = "megadrones.spawn";
         private const string PermissionFetch = "megadrones.fetch";
@@ -74,16 +72,21 @@ namespace Oxide.Plugins
             + Layers.Mask.Construction
             + Layers.Mask.Tree;
 
-        private DynamicHookSubscriber<uint> _megaDroneTracker;
+        private DynamicHookHashSet<uint> _megaDroneTracker;
+        private DynamicHookHashSet<ulong> _droneMounteeTracker;
+        private DynamicHookHashSet<ulong> _droneControllerTracker;
 
-        private DynamicHookSubscriber<ulong> _droneMounteeTracker = new DynamicHookSubscriber<ulong>(
-            nameof(OnEntityDismounted),
-            nameof(OnPlayerDismountFailed)
-        );
+        public MegaDrones()
+        {
+            _droneMounteeTracker = new DynamicHookHashSet<ulong>(this,
+                nameof(OnEntityDismounted),
+                nameof(OnPlayerDismountFailed)
+            );
 
-        private DynamicHookSubscriber<ulong> _droneControllerTracker = new DynamicHookSubscriber<ulong>(
-            nameof(OnServerCommand)
-        );
+            _droneControllerTracker = new DynamicHookHashSet<ulong>(this,
+                nameof(OnServerCommand)
+            );
+        }
 
         #endregion
 
@@ -91,16 +94,15 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            _pluginInstance = this;
-            _pluginConfig.Init(this);
-            _pluginData = StoredData.Load();
+            _config.Init(this);
+            _data = StoredData.Load();
 
             permission.RegisterPermission(PermissionSpawn, this);
             permission.RegisterPermission(PermissionFetch, this);
             permission.RegisterPermission(PermissionDestroy, this);
             permission.RegisterPermission(PermissionGive, this);
 
-            foreach (var entry in _pluginConfig.CommandAliases)
+            foreach (var entry in _config.CommandAliases)
             {
                 if (entry.Key == CommandName_MegaDrone)
                 {
@@ -126,16 +128,16 @@ namespace Oxide.Plugins
                 nameof(OnDroneRangeLimit),
             };
 
-            if (_pluginConfig.DestroyOnDisconnect)
+            if (_config.DestroyOnDisconnect)
             {
                 megaDroneDynamicHookNames.Add(nameof(OnPlayerDisconnected));
             }
 
-            _megaDroneTracker = new DynamicHookSubscriber<uint>(megaDroneDynamicHookNames.ToArray());
-            _megaDroneTracker.UnsubscribeAll();
+            _megaDroneTracker = new DynamicHookHashSet<uint>(this, megaDroneDynamicHookNames.ToArray());
+            _megaDroneTracker.Unsubscribe();
 
-            _droneControllerTracker.UnsubscribeAll();
-            _droneMounteeTracker.UnsubscribeAll();
+            _droneControllerTracker.Unsubscribe();
+            _droneMounteeTracker.Unsubscribe();
         }
 
         private void OnServerInitialized()
@@ -179,21 +181,17 @@ namespace Oxide.Plugins
                 CameraMovement.RemoveFromPlayer(player);
             }
 
-            _pluginData.Save();
-
-            _pluginData = null;
-            _pluginConfig = null;
-            _pluginInstance = null;
+            _data.Save();
         }
 
         private void OnServerSave()
         {
-            _pluginData.Save();
+            _data.Save();
         }
 
         private void OnNewSave()
         {
-            _pluginData = StoredData.Reset();
+            _data = StoredData.Reset();
         }
 
         private void OnPluginLoaded(Plugin plugin)
@@ -347,11 +345,11 @@ namespace Oxide.Plugins
                     ChatMessage(player, Lang.InfoDroneDestroyed);
                 }
 
-                _pluginData.UnregisterPlayerDrone(userIdString);
+                _data.UnregisterPlayerDrone(userIdString);
                 return;
             }
 
-            _pluginData.UnregisterOtherDrone(drone);
+            _data.UnregisterOtherDrone(drone);
         }
 
         private void OnBookmarkControlStarted(ComputerStation station, BasePlayer player, string bookmarkName, Drone drone)
@@ -418,7 +416,7 @@ namespace Oxide.Plugins
 
             _droneMounteeTracker.Remove(player.net.ID);
 
-            if (_pluginConfig.DestroyOnDisconnect
+            if (_config.DestroyOnDisconnect
                 // Can skip if the owner dismounted since the disconnect hook will handle that case.
                 && player.userID != drone.OwnerID
                 // Make sure it's the player's personal drone, not one given by givemegadrone or via API.
@@ -561,7 +559,7 @@ namespace Oxide.Plugins
 
             if (canSpawn)
             {
-                var spawnSecondsRemaining = _pluginData.GetRemainingCooldownSeconds(player.Id, CooldownType.Spawn);
+                var spawnSecondsRemaining = GetRemainingCooldownSeconds(player.Id, CooldownType.Spawn);
                 var cooldownMessage = spawnSecondsRemaining > 0
                     ? GetMessage(player, Lang.HelpRemainingCooldown, FormatTime(spawnSecondsRemaining))
                     : string.Empty;
@@ -571,7 +569,7 @@ namespace Oxide.Plugins
 
             if (canFetch)
             {
-                var fetchSecondsRemaining = _pluginData.GetRemainingCooldownSeconds(player.Id, CooldownType.Fetch);
+                var fetchSecondsRemaining = GetRemainingCooldownSeconds(player.Id, CooldownType.Fetch);
                 var cooldownMessage = fetchSecondsRemaining > 0
                     ? GetMessage(player, Lang.HelpRemainingCooldown, FormatTime(fetchSecondsRemaining))
                     : string.Empty;
@@ -605,7 +603,7 @@ namespace Oxide.Plugins
             {
                 var hasFetchPermission = permission.UserHasPermission(player.Id, PermissionFetch);
 
-                if (_pluginConfig.AutoFetch && hasFetchPermission)
+                if (_config.AutoFetch && hasFetchPermission)
                 {
                     FetchInternal(player, drone);
                 }
@@ -624,7 +622,7 @@ namespace Oxide.Plugins
             }
 
             if (!VerifyOffCooldown(player, CooldownType.Spawn)
-                || !_pluginConfig.CanSpawnBuildingBlocked && !VerifyCanBuild(player)
+                || !_config.CanSpawnBuildingBlocked && !VerifyCanBuild(player)
                 || !VerifySufficientSpace(player, out spawnPosition, out spawnRotation)
                 || SpawnMegaDroneWasBlocked(basePlayer))
                 return;
@@ -634,7 +632,7 @@ namespace Oxide.Plugins
             {
                 ReplyToPlayer(player, Lang.SpawnSuccess);
 
-                if (_pluginConfig.AutoMount)
+                if (_config.AutoMount)
                 {
                     TryMountPlayer(drone, basePlayer);
                 }
@@ -648,13 +646,13 @@ namespace Oxide.Plugins
             Quaternion fetchRotation;
 
             if (!VerifyOffCooldown(player, CooldownType.Fetch)
-                || !_pluginConfig.CanFetchOccupied && !VerifyDroneNotOccupied(player, drone)
-                || !_pluginConfig.CanFetchBuildingBlocked && !VerifyCanBuild(player)
+                || !_config.CanFetchOccupied && !VerifyDroneNotOccupied(player, drone)
+                || !_config.CanFetchBuildingBlocked && !VerifyCanBuild(player)
                 || !VerifySufficientSpace(player, out fetchPosition, out fetchRotation)
                 || FetchMegaDroneWasBlocked(basePlayer, drone))
                 return;
 
-            if (_pluginConfig.DismountPlayersOnFetch)
+            if (_config.DismountPlayersOnFetch)
             {
                 DismountAllPlayersFromDrone(drone);
             }
@@ -668,10 +666,10 @@ namespace Oxide.Plugins
             rootEntity.UpdateNetworkGroup();
             rootEntity.SendNetworkUpdateImmediate();
 
-            _pluginData.StartCooldown(player.Id, CooldownType.Fetch);
+            StartCooldown(player.Id, CooldownType.Fetch);
             ReplyToPlayer(player, Lang.SpawnSuccess);
 
-            if (_pluginConfig.AutoMount)
+            if (_config.AutoMount)
             {
                 TryMountPlayer(drone, basePlayer);
             }
@@ -701,7 +699,7 @@ namespace Oxide.Plugins
             Drone drone;
 
             if (!VerifyHasDrone(player, out drone)
-                || !_pluginConfig.CanDestroyWhileOccupied && !VerifyDroneNotOccupied(player, drone)
+                || !_config.CanDestroyWhileOccupied && !VerifyDroneNotOccupied(player, drone)
                 || DestroyMegaDroneWasBlocked(basePlayer, drone))
                 return;
 
@@ -805,7 +803,7 @@ namespace Oxide.Plugins
 
         private bool VerifyOffCooldown(IPlayer player, CooldownType cooldownType)
         {
-            var secondsRemaining = _pluginData.GetRemainingCooldownSeconds(player.Id, cooldownType);
+            var secondsRemaining = GetRemainingCooldownSeconds(player.Id, cooldownType);
             if (secondsRemaining <= 0)
                 return true;
 
@@ -850,26 +848,30 @@ namespace Oxide.Plugins
 
         #region Helper Methods
 
-        private static bool VerifyDependencies()
+        public static void LogInfo(string message) => Interface.Oxide.LogInfo($"[Mega Drones] {message}");
+        public static void LogError(string message) => Interface.Oxide.LogError($"[Mega Drones] {message}");
+        public static void LogWarning(string message) => Interface.Oxide.LogWarning($"[Mega Drones] {message}");
+
+        private bool VerifyDependencies()
         {
-            if (_pluginInstance.DroneScaleManager == null)
+            if (DroneScaleManager == null)
             {
-                _pluginInstance.LogError("DroneScaleManager is not loaded, get it at https://umod.org");
+                LogError("DroneScaleManager is not loaded, get it at https://umod.org");
                 return false;
             }
 
-            if (_pluginInstance.EntityScaleManager == null)
+            if (EntityScaleManager == null)
             {
-                _pluginInstance.LogError("EntityScaleManager is not loaded, get it at https://umod.org");
+                LogError("EntityScaleManager is not loaded, get it at https://umod.org");
                 return false;
             }
 
             return true;
         }
 
-        private static void RegisterWithVehicleDeployedLocks()
+        private void RegisterWithVehicleDeployedLocks()
         {
-            if (_pluginInstance.VehicleDeployedLocks == null)
+            if (VehicleDeployedLocks == null)
                 return;
 
             // Locks will be attached to the computer station.
@@ -888,7 +890,7 @@ namespace Oxide.Plugins
                 return null;
             };
 
-            _pluginInstance.VehicleDeployedLocks.Call("API_RegisterCustomVehicleType", "megadrone", LockPosition, LockRotation, null, determineLockParent);
+            VehicleDeployedLocks.Call("API_RegisterCustomVehicleType", "megadrone", LockPosition, LockRotation, null, determineLockParent);
         }
 
         private static bool SpawnMegaDroneWasBlocked(BasePlayer player)
@@ -909,9 +911,9 @@ namespace Oxide.Plugins
             return hookResult is bool && (bool)hookResult == false;
         }
 
-        private static BaseEntity GetRootEntity(Drone drone)
+        private BaseEntity GetRootEntity(Drone drone)
         {
-            return _pluginInstance.DroneScaleManager?.Call("API_GetRootEntity", drone) as BaseEntity;
+            return DroneScaleManager?.Call("API_GetRootEntity", drone) as BaseEntity;
         }
 
         private static string GetCooldownPermission(string permissionSuffix)
@@ -919,44 +921,44 @@ namespace Oxide.Plugins
             return $"{PermissionCooldownPrefix}.{permissionSuffix}";
         }
 
-        public static bool IsMegaDrone(Drone drone)
+        public bool IsMegaDrone(Drone drone)
         {
-            return _pluginData.IsMegaDrone(drone);
+            return _data.IsMegaDrone(drone);
         }
 
-        public static bool IsMegaDrone(Drone drone, out string userIdString)
+        public bool IsMegaDrone(Drone drone, out string userIdString)
         {
-            return _pluginData.IsMegaDrone(drone, out userIdString);
+            return _data.IsMegaDrone(drone, out userIdString);
         }
 
-        public static bool IsPlayerMegaDrone(Drone drone)
+        public bool IsPlayerMegaDrone(Drone drone)
         {
             string userIdString;
-            return _pluginData.IsMegaDrone(drone, out userIdString) && userIdString != null;
+            return _data.IsMegaDrone(drone, out userIdString) && userIdString != null;
         }
 
-        private static Drone GetParentMegaDrone(BaseEntity entity, out BaseEntity rootEntity)
+        private Drone GetParentMegaDrone(BaseEntity entity, out BaseEntity rootEntity)
         {
             rootEntity = entity.GetParentEntity();
             if (rootEntity == null)
                 return null;
 
-            var drone = _pluginInstance.DroneScaleManager?.Call("API_GetParentDrone", entity) as Drone;
+            var drone = DroneScaleManager?.Call("API_GetParentDrone", entity) as Drone;
             if (drone == null || !IsMegaDrone(drone))
                 return null;
 
             return drone;
         }
 
-        private static Drone GetParentMegaDrone(BaseEntity entity)
+        private Drone GetParentMegaDrone(BaseEntity entity)
         {
             BaseEntity rootEntity;
             return GetParentMegaDrone(entity, out rootEntity);
         }
 
-        private static bool ParentEntityToDrone(Drone drone, BaseEntity entity)
+        private bool ParentEntityToDrone(Drone drone, BaseEntity entity)
         {
-            var result = _pluginInstance.DroneScaleManager?.Call("API_ParentEntity", drone, entity);
+            var result = DroneScaleManager?.Call("API_ParentEntity", drone, entity);
             return result is bool && (bool)result;
         }
 
@@ -972,7 +974,7 @@ namespace Oxide.Plugins
             return null;
         }
 
-        private static ComputerStation GetComputerStation(Drone drone)
+        private ComputerStation GetComputerStation(Drone drone)
         {
             var rootEntity = GetRootEntity(drone);
             if (rootEntity == null)
@@ -981,7 +983,7 @@ namespace Oxide.Plugins
             return GetChildOfType<ComputerStation>(rootEntity);
         }
 
-        private static CCTV_RC GetCamera(Drone drone)
+        private CCTV_RC GetCamera(Drone drone)
         {
             var rootEntity = GetRootEntity(drone);
             if (rootEntity == null)
@@ -1006,7 +1008,7 @@ namespace Oxide.Plugins
             Interface.CallHook("OnBookmarkControlStarted", station, player, controllable.GetIdentifier(), entity);
         }
 
-        private static bool TryMountPlayer(Drone drone, BasePlayer player)
+        private bool TryMountPlayer(Drone drone, BasePlayer player)
         {
             var station = GetComputerStation(drone);
             if (station == null)
@@ -1052,7 +1054,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private static ComputerStation DeployComputerStation(Drone drone, BasePlayer player)
+        private ComputerStation DeployComputerStation(Drone drone, BasePlayer player)
         {
             var station = GameManager.server.CreateEntity(ComputerStationPrefab, ComputerStationLocalPosition, ComputerStationLocalRotation) as ComputerStation;
             if (station == null)
@@ -1086,13 +1088,13 @@ namespace Oxide.Plugins
             camera.UpdateFromInput(5, 0);
         }
 
-        private static CCTV_RC DeployCamera(Drone drone, BasePlayer player, int idNumber)
+        private CCTV_RC DeployCamera(Drone drone, BasePlayer player, int idNumber)
         {
             var camera = GameManager.server.CreateEntity(CCTVPrefab, CameraLocalPosition, CameraLocalRotation) as CCTV_RC;
             if (camera == null)
                 return null;
 
-            camera.UpdateIdentifier($"{_pluginConfig.CamIdentifierPrefix}{idNumber}");
+            camera.UpdateIdentifier($"{_config.CamIdentifierPrefix}{idNumber}");
             SetupCamera(drone, camera);
 
             if (!ParentEntityToDrone(drone, camera))
@@ -1149,10 +1151,10 @@ namespace Oxide.Plugins
             return Quaternion.Euler(0, rotation.eulerAngles.y, 0);
         }
 
-        private static void SetupDrone(Drone drone)
+        private void SetupDrone(Drone drone)
         {
             drone.pickup.enabled = false;
-            _pluginInstance._megaDroneTracker.Add(drone.net.ID);
+            _megaDroneTracker.Add(drone.net.ID);
         }
 
         private static int SetRandomIdentifier(IRemoteControllable controllable, string prefix)
@@ -1178,7 +1180,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private static Drone SpawnMegaDrone(BasePlayer player, bool shouldTrack = true)
+        private Drone SpawnMegaDrone(BasePlayer player, bool shouldTrack = true)
         {
             if (!VerifyDependencies())
                 return null;
@@ -1188,11 +1190,11 @@ namespace Oxide.Plugins
                 return null;
 
             drone.OwnerID = player.userID;
-            var idNumber = SetRandomIdentifier(drone, _pluginConfig.DroneIdentifierPrefix);
+            var idNumber = SetRandomIdentifier(drone, _config.DroneIdentifierPrefix);
             drone.Spawn();
             SetupDrone(drone);
 
-            _pluginInstance.DroneScaleManager.Call("API_ScaleDrone", drone, MegaDroneScale);
+            DroneScaleManager.Call("API_ScaleDrone", drone, MegaDroneScale);
             RunOnEntityBuilt(player, drone, DroneItemId);
 
             var computerStation = DeployComputerStation(drone, player);
@@ -1210,12 +1212,12 @@ namespace Oxide.Plugins
 
             if (shouldTrack)
             {
-                _pluginData.RegisterPlayerDrone(player.UserIDString, drone);
-                _pluginData.StartCooldown(player.UserIDString, CooldownType.Spawn);
+                _data.RegisterPlayerDrone(player.UserIDString, drone);
+                StartCooldown(player.UserIDString, CooldownType.Spawn);
             }
             else
             {
-                _pluginData.RegisterOtherDrone(drone);
+                _data.RegisterOtherDrone(drone);
             }
 
             Interface.CallHook("OnMegaDroneSpawned", drone, player);
@@ -1262,13 +1264,15 @@ namespace Oxide.Plugins
             return TimeSpan.FromSeconds(seconds).ToString("g");
         }
 
-        private static void DismountAllPlayersFromDrone(Drone drone)
+        private void DismountAllPlayersFromDrone(Drone drone)
         {
             var rootEntity = GetRootEntity(drone);
             var station = GetComputerStation(drone);
 
             if (station.AnyMounted())
+            {
                 station.DismountAllPlayers();
+            }
 
             if (rootEntity != null)
             {
@@ -1283,22 +1287,22 @@ namespace Oxide.Plugins
             }
         }
 
-        private static Drone FindPlayerDrone(string userId)
+        private Drone FindPlayerDrone(string userId)
         {
             uint droneId;
-            if (!_pluginData.PlayerDrones.TryGetValue(userId, out droneId))
+            if (!_data.PlayerDrones.TryGetValue(userId, out droneId))
                 return null;
 
             var drone = BaseNetworkable.serverEntities.Find(droneId) as Drone;
             if (drone == null)
             {
-                _pluginData.UnregisterPlayerDrone(userId);
+                _data.UnregisterPlayerDrone(userId);
             }
 
             return drone;
         }
 
-        private static BasePlayer GetMountedPlayer(Drone drone)
+        private BasePlayer GetMountedPlayer(Drone drone)
         {
             var station = GetComputerStation(drone);
             if (station == null)
@@ -1307,7 +1311,7 @@ namespace Oxide.Plugins
             return station.GetMounted();
         }
 
-        private static bool HasChildPlayer(Drone drone)
+        private bool HasChildPlayer(Drone drone)
         {
             var rootEntity = GetRootEntity(drone);
             if (rootEntity == null)
@@ -1350,7 +1354,7 @@ namespace Oxide.Plugins
 
         private void RefreshAllMegaDrones()
         {
-            var megaDroneIds = _pluginData.GetAllMegaDroneIds();
+            var megaDroneIds = _data.GetAllMegaDroneIds();
 
             foreach (var entity in BaseNetworkable.serverEntities)
             {
@@ -1367,7 +1371,7 @@ namespace Oxide.Plugins
 
         private string DetermineSubCommand(string argLower)
         {
-            foreach (var entry in _pluginConfig.SubcommandAliases)
+            foreach (var entry in _config.SubcommandAliases)
             {
                 var commandLower = entry.Key.ToLowerInvariant();
                 if (commandLower == argLower || entry.Value.Contains(argLower))
@@ -1377,51 +1381,108 @@ namespace Oxide.Plugins
             return argLower;
         }
 
+        private long GetRemainingCooldownSeconds(string userId, CooldownType cooldownType)
+        {
+            long cooldownStart;
+            if (!_data.Cooldowns.GetCooldownMap(cooldownType).TryGetValue(userId, out cooldownStart))
+                return 0;
+
+            var cooldownSeconds = _config.GetCooldownConfigForPlayer(this, userId).GetSeconds(cooldownType);
+            return cooldownStart + cooldownSeconds - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        }
+
+        private void StartCooldown(string userId, CooldownType cooldownType)
+        {
+            if (_config.GetCooldownConfigForPlayer(this, userId).GetSeconds(cooldownType) <= 0)
+                return;
+
+            _data.Cooldowns.GetCooldownMap(cooldownType)[userId] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        }
+
         #endregion
 
-        #region Dynamic Hook Subscriptions
+        #region Dynamic Hooks
 
-        private class DynamicHookSubscriber<T>
+        private class HookCollection
         {
-            private HashSet<T> _list = new HashSet<T>();
-            private string[] _hookNames;
+            public bool IsSubscribed { get; private set; } = true;
+            private readonly MegaDrones _plugin;
+            private readonly string[] _hookNames;
+            private readonly Func<bool> _shouldSubscribe;
 
-            public DynamicHookSubscriber(params string[] hookNames)
+            public HookCollection(MegaDrones plugin, Func<bool> shouldSubscribe, params string[] hookNames)
             {
+                _plugin = plugin;
                 _hookNames = hookNames;
+                _shouldSubscribe = shouldSubscribe;
             }
 
-            public void Add(T item)
-            {
-                if (_list.Add(item) && _list.Count == 1)
-                {
-                    SubscribeAll();
-                }
-            }
-
-            public void Remove(T item)
-            {
-                if (_list.Remove(item) && _list.Count == 0)
-                {
-                    UnsubscribeAll();
-                }
-            }
-
-            public void SubscribeAll()
+            public void Subscribe()
             {
                 foreach (var hookName in _hookNames)
                 {
-                    _pluginInstance.Subscribe(hookName);
+                    _plugin.Subscribe(hookName);
                 }
+
+                IsSubscribed = true;
             }
 
-            public void UnsubscribeAll()
+            public void Unsubscribe()
             {
                 foreach (var hookName in _hookNames)
                 {
-                    _pluginInstance.Unsubscribe(hookName);
+                    _plugin.Unsubscribe(hookName);
+                }
+
+                IsSubscribed = false;
+            }
+
+            public void Refresh()
+            {
+                if (_shouldSubscribe())
+                {
+                    if (!IsSubscribed)
+                    {
+                        Subscribe();
+                    }
+                }
+                else if (IsSubscribed)
+                {
+                    Unsubscribe();
                 }
             }
+        }
+
+        private class DynamicHookHashSet<T> : HashSet<T>
+        {
+            private readonly HookCollection _hookCollection;
+
+            public DynamicHookHashSet(MegaDrones plugin, params string[] hookNames)
+            {
+                _hookCollection = new HookCollection(plugin, () => Count > 0, hookNames);
+            }
+
+            public new bool Add(T item)
+            {
+                var result = base.Add(item);
+                if (result)
+                {
+                    _hookCollection.Refresh();
+                }
+                return result;
+            }
+
+            public new bool Remove(T item)
+            {
+                var result = base.Remove(item);
+                if (result)
+                {
+                    _hookCollection.Refresh();
+                }
+                return result;
+            }
+
+            public void Unsubscribe() => _hookCollection.Unsubscribe();
         }
 
         #endregion
@@ -1479,14 +1540,14 @@ namespace Oxide.Plugins
 
             public static StoredData Load()
             {
-                return Interface.Oxide.DataFileSystem.ReadObject<StoredData>(_pluginInstance.Name) ?? new StoredData();
+                return Interface.Oxide.DataFileSystem.ReadObject<StoredData>(nameof(MegaDrones)) ?? new StoredData();
             }
 
             public static StoredData Reset() => new StoredData().Save();
 
             public StoredData Save()
             {
-                Interface.Oxide.DataFileSystem.WriteObject(_pluginInstance.Name, this);
+                Interface.Oxide.DataFileSystem.WriteObject(nameof(MegaDrones), this);
                 return this;
             }
 
@@ -1501,7 +1562,7 @@ namespace Oxide.Plugins
             {
                 var droneId = drone.net.ID;
 
-                foreach (var entry in _pluginData.PlayerDrones)
+                foreach (var entry in PlayerDrones)
                 {
                     if (entry.Value == droneId)
                     {
@@ -1539,24 +1600,6 @@ namespace Oxide.Plugins
             {
                 OtherDrones.Remove(drone.net.ID);
             }
-
-            public long GetRemainingCooldownSeconds(string userId, CooldownType cooldownType)
-            {
-                long cooldownStart;
-                if (!Cooldowns.GetCooldownMap(cooldownType).TryGetValue(userId, out cooldownStart))
-                    return 0;
-
-                var cooldownSeconds = _pluginConfig.GetCooldownConfigForPlayer(userId).GetSeconds(cooldownType);
-                return cooldownStart + cooldownSeconds - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            }
-
-            public void StartCooldown(string userId, CooldownType cooldownType)
-            {
-                if (_pluginConfig.GetCooldownConfigForPlayer(userId).GetSeconds(cooldownType) <= 0)
-                    return;
-
-                Cooldowns.GetCooldownMap(cooldownType)[userId] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            }
         }
 
         private enum CooldownType { Spawn, Fetch }
@@ -1578,7 +1621,7 @@ namespace Oxide.Plugins
                     case CooldownType.Fetch:
                         return Fetch;
                     default:
-                        _pluginInstance.LogWarning($"Cooldown not implemented for {cooldownType}");
+                        LogWarning($"Cooldown not implemented for {cooldownType}");
                         return null;
                 }
             }
@@ -1685,7 +1728,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            public CooldownConfig GetCooldownConfigForPlayer(string userId)
+            public CooldownConfig GetCooldownConfigForPlayer(MegaDrones plugin, string userId)
             {
                 if (CooldownsRequiringPermission.Length == 0)
                     return DefaultCooldowns;
@@ -1693,7 +1736,7 @@ namespace Oxide.Plugins
                 for (var i = CooldownsRequiringPermission.Length - 1; i >= 0; i--)
                 {
                     var config = CooldownsRequiringPermission[i];
-                    if (config.Permission != null && _pluginInstance.permission.UserHasPermission(userId, config.Permission))
+                    if (config.Permission != null && plugin.permission.UserHasPermission(userId, config.Permission))
                         return config;
                 }
 
@@ -1715,13 +1758,13 @@ namespace Oxide.Plugins
             [JsonIgnore]
             public string Permission;
 
-            public void Init(MegaDrones pluginInstance)
+            public void Init(MegaDrones plugin)
             {
                 if (string.IsNullOrWhiteSpace(PermissionSuffix))
                     return;
 
                 Permission = GetCooldownPermission(PermissionSuffix);
-                pluginInstance.permission.RegisterPermission(Permission, pluginInstance);
+                plugin.permission.RegisterPermission(Permission, plugin);
             }
 
             public long GetSeconds(CooldownType cooldownType)
@@ -1733,7 +1776,7 @@ namespace Oxide.Plugins
                     case CooldownType.Fetch:
                         return FetchSeconds;
                     default:
-                        _pluginInstance.LogWarning($"Cooldown not implemented for {cooldownType}");
+                        LogWarning($"Cooldown not implemented for {cooldownType}");
                         return 0;
                 }
             }
@@ -1816,20 +1859,20 @@ namespace Oxide.Plugins
             return changed;
         }
 
-        protected override void LoadDefaultConfig() => _pluginConfig = GetDefaultConfig();
+        protected override void LoadDefaultConfig() => _config = GetDefaultConfig();
 
         protected override void LoadConfig()
         {
             base.LoadConfig();
             try
             {
-                _pluginConfig = Config.ReadObject<Configuration>();
-                if (_pluginConfig == null)
+                _config = Config.ReadObject<Configuration>();
+                if (_config == null)
                 {
                     throw new JsonException();
                 }
 
-                if (MaybeUpdateConfig(_pluginConfig))
+                if (MaybeUpdateConfig(_config))
                 {
                     LogWarning("Configuration appears to be outdated; updating and saving");
                     SaveConfig();
@@ -1846,7 +1889,7 @@ namespace Oxide.Plugins
         protected override void SaveConfig()
         {
             Log($"Configuration changes saved to {Name}.json");
-            Config.WriteObject(_pluginConfig, true);
+            Config.WriteObject(_config, true);
         }
 
         #endregion
