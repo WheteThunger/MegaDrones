@@ -7,13 +7,14 @@ using Rust;
 using System.Collections.Generic;
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using UnityEngine;
 using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Mega Drones", "WhiteThunder", "0.2.5")]
+    [Info("Mega Drones", "WhiteThunder", "0.2.6")]
     [Description("Allows players to spawn large drones with computer stations attached to them.")]
     internal class MegaDrones : CovalencePlugin
     {
@@ -60,6 +61,8 @@ namespace Oxide.Plugins
         private static readonly Quaternion LockRotation = Quaternion.Euler(0, 270, 90);
 
         private static readonly Vector3 DroneExtents = new Vector3(0.75f, 0.1f, 0.75f) * MegaDroneScale / 2;
+
+        private static FieldInfo StationCurrentPlayerIdField = typeof(ComputerStation).GetField("currentPlayerID", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
         private readonly object True = true;
         private readonly object False = false;
@@ -364,9 +367,12 @@ namespace Oxide.Plugins
             if (drone == null)
                 return;
 
-            Interface.CallHook("OnBookmarkControlStarted", station, player, drone.GetIdentifier(), drone);
+            if (!RCUtils.CanControl(player, drone))
+                return;
+
+            RCUtils.AddViewer(drone, player);
             CameraMovement.AddToPlayer(player, drone);
-            _droneControllerTracker.Add(player.userID);
+            Interface.CallHook("OnBookmarkControlStarted", station, player, drone.GetIdentifier(), drone);
         }
 
         private void OnBookmarkControlEnded(ComputerStation station, BasePlayer player, Drone drone)
@@ -386,14 +392,12 @@ namespace Oxide.Plugins
             if (drone == null)
                 return;
 
-            if (drone.ControllingViewerId.HasValue)
-            {
-                drone.StopControl(drone.ControllingViewerId.Value);
-            }
+            if (!RCUtils.HasController(drone, player))
+                return;
 
-            Interface.CallHook("OnBookmarkControlEnded", station, player, drone);
+            RCUtils.RemoveController(drone);
             CameraMovement.RemoveFromPlayer(player);
-            _droneControllerTracker.Remove(player.userID);
+            Interface.CallHook("OnBookmarkControlEnded", station, player, drone);
         }
 
         private void OnEntityMounted(ComputerStation station, BasePlayer player)
@@ -403,7 +407,6 @@ namespace Oxide.Plugins
                 return;
 
             StartControlling(player, station, drone);
-            _droneMounteeTracker.Add(player.net.ID);
         }
 
         private void OnEntityDismounted(ComputerStation station, BasePlayer player)
@@ -737,6 +740,42 @@ namespace Oxide.Plugins
 
         #endregion
 
+        #region Utilities
+
+        private static class RCUtils
+        {
+            public static bool HasController(IRemoteControllable controllable, BasePlayer player)
+            {
+                return controllable.ControllingViewerId?.SteamId == player.userID;
+            }
+
+            public static bool HasRealController(IRemoteControllable controllable)
+            {
+                return controllable.ControllingViewerId.GetValueOrDefault().SteamId != 0;
+            }
+
+            public static bool CanControl(BasePlayer player, IRemoteControllable controllable)
+            {
+                return !HasRealController(controllable) || HasController(controllable, player);
+            }
+
+            public static void RemoveController(IRemoteControllable controllable)
+            {
+                var controllerId = controllable.ControllingViewerId;
+                if (controllerId.HasValue)
+                {
+                    controllable.StopControl(controllerId.Value);
+                }
+            }
+
+            public static bool AddViewer(IRemoteControllable controllable, BasePlayer player)
+            {
+                return controllable.InitializeControl(new CameraViewerId(player.userID, 0));
+            }
+        }
+
+        #endregion
+
         #region Helper Methods - Command Checks
 
         private bool VerifyPermission(IPlayer player, string perm)
@@ -989,11 +1028,10 @@ namespace Oxide.Plugins
                 return;
 
             station.currentlyControllingEnt.uid = entity.net.ID;
-            station.SetFlag(BaseEntity.Flags.Reserved2, true);
+            StationCurrentPlayerIdField.SetValue(station, player.userID);
+            var isControlling = RCUtils.AddViewer(controllable, player);
+            station.SetFlag(ComputerStation.Flag_HasFullControl, isControlling, networkupdate: false);
             station.SendNetworkUpdateImmediate();
-            station.SendControlBookmarks(player);
-            var viewerId = new CameraViewerId(player.userID, 0);
-            controllable.InitializeControl(viewerId);
             station.InvokeRepeating(station.ControlCheck, 0, 0);
             Interface.CallHook("OnBookmarkControlStarted", station, player, controllable.GetIdentifier(), entity);
         }
