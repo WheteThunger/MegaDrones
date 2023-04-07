@@ -7,7 +7,6 @@
 - Allows players to spawn large drones with computer stations attached to them
 - Attaches a camera to the bottom for viewing directly below the drone
 - Allows moving the drone while controlling the camera
-- Allows quickly switching between the drone and camera view using the "swap seats" key
 - API and server command allow integration with other plugins
 - One mega drone per player
 - Configurable cooldowns based on permission
