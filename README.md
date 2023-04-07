@@ -212,7 +212,7 @@ Drone API_SpawnMegaDrone(BasePlayer player)
 #### OnMegaDroneSpawn
 
 ```csharp
-bool? OnMegaDroneSpawn(BasePlayer player)
+object OnMegaDroneSpawn(BasePlayer player)
 ```
 
 - Called when a mega drone is about to be spawned for a player
@@ -222,7 +222,7 @@ bool? OnMegaDroneSpawn(BasePlayer player)
 #### OnMegaDroneSpawned
 
 ```csharp
-bool? OnMegaDroneSpawned(Drone drone, BasePlayer player)
+object OnMegaDroneSpawned(Drone drone, BasePlayer player)
 ```
 
 - Called after a mega drone has been spawned for a palyer
@@ -231,7 +231,7 @@ bool? OnMegaDroneSpawned(Drone drone, BasePlayer player)
 #### OnMegaDroneFetch
 
 ```csharp
-bool? OnMegaDroneFetch(BasePlayer player, Drone drone)
+object OnMegaDroneFetch(BasePlayer player, Drone drone)
 ```
 
 - Called when a player tries to fetch their mega drone
@@ -241,7 +241,7 @@ bool? OnMegaDroneFetch(BasePlayer player, Drone drone)
 #### OnMegaDroneDestroy
 
 ```csharp
-bool? OnMegaDroneDestroy(BasePlayer player, Drone drone)
+object OnMegaDroneDestroy(BasePlayer player, Drone drone)
 ```
 
 - Called when a player tries to destroy their mega drone
