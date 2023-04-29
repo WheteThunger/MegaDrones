@@ -14,7 +14,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Mega Drones", "WhiteThunder", "0.2.6")]
+    [Info("Mega Drones", "WhiteThunder", "0.2.7")]
     [Description("Allows players to spawn large drones with computer stations attached to them.")]
     internal class MegaDrones : CovalencePlugin
     {
@@ -78,7 +78,7 @@ namespace Oxide.Plugins
             + Layers.Mask.Construction
             + Layers.Mask.Tree;
 
-        private DynamicHookHashSet<uint> _megaDroneTracker;
+        private DynamicHookHashSet<NetworkableId> _megaDroneTracker;
         private DynamicHookHashSet<ulong> _droneMounteeTracker;
         private DynamicHookHashSet<ulong> _droneControllerTracker;
 
@@ -139,7 +139,7 @@ namespace Oxide.Plugins
                 megaDroneDynamicHookNames.Add(nameof(OnPlayerDisconnected));
             }
 
-            _megaDroneTracker = new DynamicHookHashSet<uint>(this, megaDroneDynamicHookNames.ToArray());
+            _megaDroneTracker = new DynamicHookHashSet<NetworkableId>(this, megaDroneDynamicHookNames.ToArray());
             _megaDroneTracker.Unsubscribe();
 
             _droneControllerTracker.Unsubscribe();
@@ -415,7 +415,7 @@ namespace Oxide.Plugins
             if (drone == null)
                 return;
 
-            _droneMounteeTracker.Remove(player.net.ID);
+            _droneMounteeTracker.Remove(player.userID);
 
             if (_config.DestroyOnDisconnect
                 // Can skip if the owner dismounted since the disconnect hook will handle that case.
@@ -1317,11 +1317,11 @@ namespace Oxide.Plugins
 
         private Drone FindPlayerDrone(string userId)
         {
-            uint droneId;
+            ulong droneId;
             if (!_data.PlayerDrones.TryGetValue(userId, out droneId))
                 return null;
 
-            var drone = BaseNetworkable.serverEntities.Find(droneId) as Drone;
+            var drone = BaseNetworkable.serverEntities.Find(new NetworkableId(droneId)) as Drone;
             if (drone == null)
             {
                 _data.UnregisterPlayerDrone(userId);
@@ -1390,7 +1390,7 @@ namespace Oxide.Plugins
                 if (drone == null || !IsDroneEligible(drone))
                     continue;
 
-                if (!megaDroneIds.Contains(drone.net.ID))
+                if (!megaDroneIds.Contains(drone.net.ID.Value))
                     continue;
 
                 RefreshMegaDrone(drone);
@@ -1558,10 +1558,10 @@ namespace Oxide.Plugins
         private class StoredData
         {
             [JsonProperty("PlayerDrones")]
-            public Dictionary<string, uint> PlayerDrones = new Dictionary<string, uint>();
+            public Dictionary<string, ulong> PlayerDrones = new Dictionary<string, ulong>();
 
             [JsonProperty("OtherDrones")]
-            public HashSet<uint> OtherDrones = new HashSet<uint>();
+            public HashSet<ulong> OtherDrones = new HashSet<ulong>();
 
             [JsonProperty("Cooldowns")]
             public CooldownManager Cooldowns = new CooldownManager();
@@ -1579,16 +1579,16 @@ namespace Oxide.Plugins
                 return this;
             }
 
-            public HashSet<uint> GetAllMegaDroneIds()
+            public HashSet<ulong> GetAllMegaDroneIds()
             {
-                var droneIds = new HashSet<uint>(PlayerDrones.Values);
+                var droneIds = new HashSet<ulong>(PlayerDrones.Values);
                 droneIds.UnionWith(OtherDrones);
                 return droneIds;
             }
 
             public bool IsMegaDrone(Drone drone, out string userIdString)
             {
-                var droneId = drone.net.ID;
+                var droneId = drone.net.ID.Value;
 
                 foreach (var entry in PlayerDrones)
                 {
@@ -1611,7 +1611,7 @@ namespace Oxide.Plugins
 
             public void RegisterPlayerDrone(string userId, Drone drone)
             {
-                PlayerDrones[userId] = drone.net.ID;
+                PlayerDrones[userId] = drone.net.ID.Value;
             }
 
             public void UnregisterPlayerDrone(string userId)
@@ -1621,12 +1621,12 @@ namespace Oxide.Plugins
 
             public void RegisterOtherDrone(Drone drone)
             {
-                OtherDrones.Add(drone.net.ID);
+                OtherDrones.Add(drone.net.ID.Value);
             }
 
             public void UnregisterOtherDrone(Drone drone)
             {
-                OtherDrones.Remove(drone.net.ID);
+                OtherDrones.Remove(drone.net.ID.Value);
             }
         }
 
