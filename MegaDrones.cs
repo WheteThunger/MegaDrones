@@ -14,7 +14,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Mega Drones", "WhiteThunder", "0.2.7")]
+    [Info("Mega Drones", "WhiteThunder", "0.2.8")]
     [Description("Allows players to spawn large drones with computer stations attached to them.")]
     internal class MegaDrones : CovalencePlugin
     {
@@ -1266,7 +1266,7 @@ namespace Oxide.Plugins
         private static void RunOnEntityBuilt(BasePlayer basePlayer, BaseEntity entity, int itemid)
         {
             // Allow other plugins to detect the entity being deployed.
-            var turretItem = basePlayer.inventory.FindItemID(itemid);
+            var turretItem = basePlayer.inventory.FindItemByItemID(itemid);
             if (turretItem != null)
             {
                 RunOnEntityBuilt(turretItem, entity);
