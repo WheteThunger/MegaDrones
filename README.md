@@ -13,9 +13,9 @@
 
 ## Known issues
 
-Since the March 2023 Rust update, drones now sway in the wind, but attached entities do not sway. This causes undesirable visuals to players observing a drone that is being controlled. There is no known fix at this time.
+Since the March 2023 Rust update, drones now sway in the wind, especially at high altitude, but attached entities do not sway. This causes undesirable visuals to players observing a drone that is being controlled. This is solved by the [No Drone Sway](https://umod.org/plugins/no-drone-sway) plugin.
 
-Additionally, it's no longer feasible to stand on drones, which means you should not attempt to dismount a Mega Drone in the air.
+Drones no longer collide with players. This means players will clip through mega drones, making it a little more difficult to mount them from the ground. Additionally, dismounting mega drones in mid air means you can no longer stand on them in mid air (was previously possible when using Drone Hover and Ridable Drones).
 
 ## How it works
 
@@ -38,7 +38,9 @@ The following plugins are required, but they work out-of-the-box, so no permissi
 
 ## Highly recommended plugins
 
-- [Drone Settings](https://umod.org/plugins/drone-settings) -- Allows changing speed, toughness and other properties of RC drones.
+While mega drones are technically usable without any of the following plugins, the out-of-the-box experience may be infeasible or imbalanced depending on your type of server, which you can address with the following plugins.
+
+- [Drone Settings](https://umod.org/plugins/drone-settings) -- Allows changing speed, toughness and other properties of RC drones. Allows separate configuration for Mega Drones.
 - [Targetable Drones](https://umod.org/plugins/targetable-drones) -- Allows RC drones to be targeted by Auto Turrets and SAM Sites.
 - [Better Drone Collision](https://umod.org/plugins/better-drone-collision) -- Fixes collision issues with large drones.
 - [Limited Drone Height](https://umod.org/plugins/limited-drone-height) -- Limits how high RC drones can be flown above terrain.
@@ -46,7 +48,6 @@ The following plugins are required, but they work out-of-the-box, so no permissi
 ## Other synergistic plugins
 
 - [Vehicle Deployed Locks](https://umod.org/plugins/vehicle-deployed-locks) -- Allows players with permissions to deploy code locks and key locks to mega drones.
-- [Drone Hover](https://umod.org/plugins/drone-hover) -- Allows RC drones to hover in place while not being controlled. This allows you to dismount a mega drone computer station in the air without it falling to the ground. Combined with Ridable Drones, this allows you to dismount the computer station while the drone is moving, without falling off, while the drone glides to a stop midair.
 - [Drone Lights](https://umod.org/plugins/drone-lights) -- Adds controllable search lights to RC drones.
 
 ## Permissions
