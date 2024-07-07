@@ -7,7 +7,6 @@ using Rust;
 using System.Collections.Generic;
 using System;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using UnityEngine;
 using VLB;
@@ -61,8 +60,6 @@ namespace Oxide.Plugins
         private static readonly Quaternion LockRotation = Quaternion.Euler(0, 270, 90);
 
         private static readonly Vector3 DroneExtents = new Vector3(0.75f, 0.1f, 0.75f) * MegaDroneScale / 2;
-
-        private static FieldInfo StationCurrentPlayerIdField = typeof(ComputerStation).GetField("currentPlayerID", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
         private readonly object True = true;
         private readonly object False = false;
@@ -1028,7 +1025,7 @@ namespace Oxide.Plugins
                 return;
 
             station.currentlyControllingEnt.uid = entity.net.ID;
-            StationCurrentPlayerIdField.SetValue(station, player.userID);
+            station.currentPlayerID = player.userID;
             var isControlling = RCUtils.AddViewer(controllable, player);
             station.SetFlag(ComputerStation.Flag_HasFullControl, isControlling, networkupdate: false);
             station.SendNetworkUpdateImmediate();
