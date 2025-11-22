@@ -13,7 +13,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Mega Drones", "WhiteThunder", "0.2.10")]
+    [Info("Mega Drones", "WhiteThunder", "0.2.11")]
     [Description("Allows players to spawn large drones with computer stations attached to them.")]
     internal class MegaDrones : CovalencePlugin
     {
@@ -297,7 +297,6 @@ namespace Oxide.Plugins
                 return null;
 
             drone.Hurt(hitInfo);
-            HitNotify(drone, hitInfo);
 
             // Return true (standard) to cancel default behavior (to prevent damage).
             return True;
@@ -1046,15 +1045,6 @@ namespace Oxide.Plugins
         private static bool IsDroneEligible(Drone drone)
         {
             return !(drone is DeliveryDrone);
-        }
-
-        private static void HitNotify(BaseEntity entity, HitInfo info)
-        {
-            var player = info.Initiator as BasePlayer;
-            if (player == null)
-                return;
-
-            entity.ClientRPCPlayer(null, player, "HitNotify");
         }
 
         private static void SetupComputerStation(Drone drone, ComputerStation station)
