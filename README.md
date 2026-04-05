@@ -15,8 +15,6 @@
 
 Since the March 2023 Rust update, drones now sway in the wind, especially at high altitude, but attached entities do not sway. This causes undesirable visuals to players observing a drone that is being controlled. This is solved by the [No Drone Sway](https://umod.org/plugins/no-drone-sway) plugin.
 
-Drones no longer collide with players. This means players will clip through mega drones, making it a little more difficult to mount them from the ground. Additionally, dismounting mega drones in mid air means you can no longer stand on them in mid air (was previously possible when using Drone Hover and Ridable Drones).
-
 ## How it works
 
 - Spawning the drone will automatically cause the player to mount the attached computer station
