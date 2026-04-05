@@ -13,14 +13,14 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Mega Drones", "WhiteThunder", "0.2.11")]
+    [Info("Mega Drones", "WhiteThunder", "0.3.0")]
     [Description("Allows players to spawn large drones with computer stations attached to them.")]
     internal class MegaDrones : CovalencePlugin
     {
         #region Fields
 
         [PluginReference]
-        private readonly Plugin DroneScaleManager, EntityScaleManager, VehicleDeployedLocks;
+        private readonly Plugin VehicleDeployedLocks;
 
         private Configuration _config;
         private StoredData _data;
@@ -43,7 +43,8 @@ namespace Oxide.Plugins
         private const int ComputerStationItemId = -1588628467;
         private const int CCTVItemId = 634478325;
 
-        private const BaseEntity.Slot MegaDroneSlot = BaseEntity.Slot.UpperModifier;
+        private const BaseEntity.Slot MegaDroneComputerStationSlot = BaseEntity.Slot.UpperModifier;
+        private const float VanillaDroneYawSpeed = 2;
 
         private const string DronePrefab = "assets/prefabs/deployable/drone/drone.deployed.prefab";
         private const string ComputerStationPrefab = "assets/prefabs/deployable/computerstation/computerstation.deployed.prefab";
@@ -51,12 +52,12 @@ namespace Oxide.Plugins
         private const string CCTVPrefab = "assets/prefabs/deployable/cctvcamera/cctv_deployed.prefab";
         private const string CCTVDeployEffectPrefab = "assets/prefabs/deployable/tuna can wall lamp/effects/tuna-can-lamp-deploy.prefab";
 
-        private static readonly Vector3 ComputerStationLocalPosition = new Vector3(0, 0.115f, 0);
+        private static readonly Vector3 ComputerStationLocalPosition = new(0, 0.115f, 0);
         private static readonly Quaternion ComputerStationLocalRotation = Quaternion.Euler(0, 180, 0);
-        private static readonly Vector3 CameraLocalPosition = new Vector3(0, -0.032f);
+        private static readonly Vector3 CameraLocalPosition = new(0, -0.032f);
         private static readonly Quaternion CameraLocalRotation = Quaternion.Euler(90, 0, 0);
 
-        private static readonly Vector3 LockPosition = new Vector3(-0.65f, 0.732f, 0.242f);
+        private static readonly Vector3 LockPosition = new(-0.65f, 0.732f, 0.242f);
         private static readonly Quaternion LockRotation = Quaternion.Euler(0, 270, 90);
 
         private static readonly Vector3 DroneExtents = new Vector3(0.75f, 0.1f, 0.75f) * MegaDroneScale / 2;
@@ -77,17 +78,12 @@ namespace Oxide.Plugins
 
         private DynamicHookHashSet<NetworkableId> _megaDroneTracker;
         private DynamicHookHashSet<ulong> _droneMounteeTracker;
-        private DynamicHookHashSet<ulong> _droneControllerTracker;
 
         public MegaDrones()
         {
             _droneMounteeTracker = new DynamicHookHashSet<ulong>(this,
                 nameof(OnEntityDismounted),
                 nameof(OnPlayerDismountFailed)
-            );
-
-            _droneControllerTracker = new DynamicHookHashSet<ulong>(this,
-                nameof(OnServerCommand)
             );
         }
 
@@ -139,18 +135,13 @@ namespace Oxide.Plugins
             _megaDroneTracker = new DynamicHookHashSet<NetworkableId>(this, megaDroneDynamicHookNames.ToArray());
             _megaDroneTracker.Unsubscribe();
 
-            _droneControllerTracker.Unsubscribe();
             _droneMounteeTracker.Unsubscribe();
         }
 
         private void OnServerInitialized()
         {
             RegisterWithVehicleDeployedLocks();
-
-            if (VerifyDependencies())
-            {
-                RefreshAllMegaDrones();
-            }
+            RefreshAllMegaDrones();
 
             foreach (var player in BasePlayer.activePlayerList)
             {
@@ -158,21 +149,11 @@ namespace Oxide.Plugins
                 if (computerStation == null)
                     continue;
 
-                OnEntityMounted(computerStation, player);
-
                 var entity = computerStation.currentlyControllingEnt.Get(serverside: true);
-                var drone = entity as Drone;
-                if (drone != null)
-                {
-                    OnBookmarkControlStarted(computerStation, player, string.Empty, drone);
-                    continue;
-                }
-
                 var camera = entity as CCTV_RC;
                 if (camera != null)
                 {
                     OnBookmarkControlStarted(computerStation, player, string.Empty, camera);
-                    continue;
                 }
             }
         }
@@ -199,14 +180,7 @@ namespace Oxide.Plugins
 
         private void OnPluginLoaded(Plugin plugin)
         {
-            if (plugin == DroneScaleManager || plugin == EntityScaleManager)
-            {
-                if (DroneScaleManager != null && EntityScaleManager != null)
-                {
-                    RefreshAllMegaDrones();
-                }
-            }
-            else if (plugin == VehicleDeployedLocks)
+            if (plugin == VehicleDeployedLocks)
             {
                 RegisterWithVehicleDeployedLocks();
             }
@@ -221,60 +195,18 @@ namespace Oxide.Plugins
             if (drone == null)
                 return;
 
+            var drone2 = drone;
+
             NextTick(() =>
             {
-                if (drone == null)
+                if (drone2 == null)
                     return;
 
-                if (GetMountedPlayer(drone) == null)
+                if (GetMountedPlayer(drone2) == null)
                 {
-                    drone.Kill();
+                    drone2.Kill();
                 }
             });
-        }
-
-        private void OnServerCommand(ConsoleSystem.Arg arg)
-        {
-            if (arg.Connection == null || arg.cmd.FullName != "vehicle.swapseats")
-                return;
-
-            var basePlayer = arg.Player();
-            if (basePlayer == null)
-                return;
-
-            var station = basePlayer.GetMounted() as ComputerStation;
-            if (station == null)
-                return;
-
-            var controlledEntity = station.currentlyControllingEnt.Get(serverside: true);
-            if (controlledEntity == null)
-                return;
-
-            CCTV_RC camera;
-
-            Drone drone = controlledEntity as Drone;
-            if (drone != null && IsMegaDrone(drone))
-            {
-                camera = GetCamera(drone);
-                if (camera == null)
-                    return;
-
-                station.StopControl(basePlayer);
-                StartControlling(basePlayer, station, camera);
-                return;
-            }
-
-            camera = controlledEntity as CCTV_RC;
-            if (camera != null)
-            {
-                drone = GetParentMegaDrone(camera);
-                if (drone == null)
-                    return;
-
-                station.StopControl(basePlayer);
-                StartControlling(basePlayer, station, drone);
-                return;
-            }
         }
 
         // Redirect damage from the computer station to the drone.
@@ -328,8 +260,7 @@ namespace Oxide.Plugins
 
         private void OnEntityKill(Drone drone)
         {
-            string userIdString;
-            if (!IsMegaDrone(drone, out userIdString))
+            if (!IsMegaDrone(drone, out var userIdString))
                 return;
 
             _megaDroneTracker.Remove(drone.net.ID);
@@ -349,14 +280,6 @@ namespace Oxide.Plugins
             _data.UnregisterOtherDrone(drone);
         }
 
-        private void OnBookmarkControlStarted(ComputerStation station, BasePlayer player, string bookmarkName, Drone drone)
-        {
-            if (!IsMegaDrone(drone))
-                return;
-
-            _droneControllerTracker.Add(player.userID);
-        }
-
         private void OnBookmarkControlStarted(ComputerStation station, BasePlayer player, string bookmarkName, CCTV_RC camera)
         {
             var drone = GetParentMegaDrone(camera);
@@ -369,14 +292,6 @@ namespace Oxide.Plugins
             RCUtils.AddViewer(drone, player);
             CameraMovement.AddToPlayer(player, drone);
             Interface.CallHook("OnBookmarkControlStarted", station, player, drone.GetIdentifier(), drone);
-        }
-
-        private void OnBookmarkControlEnded(ComputerStation station, BasePlayer player, Drone drone)
-        {
-            if (drone == null || !IsMegaDrone(drone))
-                return;
-
-            _droneControllerTracker.Remove(player.userID);
         }
 
         private void OnBookmarkControlEnded(ComputerStation station, BasePlayer player, CCTV_RC camera)
@@ -432,17 +347,16 @@ namespace Oxide.Plugins
             if (station == null)
                 return;
 
-            BaseEntity rootEntity;
-            var drone = GetParentMegaDrone(station, out rootEntity);
+            var drone = GetParentMegaDrone(station);
             if (drone == null)
                 return;
 
-            var rootTransform = rootEntity.transform;
-            if (Vector3.Dot(Vector3.up, rootTransform.up) > 0.1f)
+            var droneTransform = drone.transform;
+            if (Vector3.Dot(Vector3.up, droneTransform.up) > 0.1f)
                 return;
 
             // Player failed to dismount, and drone is at a bad angle, flip it upright.
-            rootTransform.rotation = Quaternion.Euler(0, rootTransform.rotation.eulerAngles.y, 0);
+            droneTransform.rotation = Quaternion.Euler(0, droneTransform.rotation.eulerAngles.y, 0);
         }
 
         private object OnCCTVDirectionChange(CCTV_RC camera)
@@ -453,13 +367,11 @@ namespace Oxide.Plugins
         // This hook is exposed by plugin: Vehicle Deployed Locks (VehicleDeployedLocks).
         private void OnVehicleLockDeployed(ComputerStation computerStation, BaseLock baseLock)
         {
-            BaseEntity rootEntity;
-            var drone = GetParentMegaDrone(computerStation, out rootEntity);
+            var drone = GetParentMegaDrone(computerStation);
             if (drone == null)
                 return;
 
-            // Reference the lock from the other entities to make things easier for other plugins.
-            rootEntity.SetSlot(BaseEntity.Slot.Lock, baseLock);
+            // Reference the lock from the drone to make things easier for other plugins.
             drone.SetSlot(BaseEntity.Slot.Lock, baseLock);
         }
 
@@ -580,8 +492,6 @@ namespace Oxide.Plugins
                 return;
 
             var basePlayer = player.Object as BasePlayer;
-            Vector3 spawnPosition;
-            Quaternion spawnRotation;
 
             if (!VerifyCanInteract(player)
                 || !VerifyNotMounted(player))
@@ -612,7 +522,7 @@ namespace Oxide.Plugins
 
             if (!VerifyOffCooldown(player, CooldownType.Spawn)
                 || !_config.CanSpawnBuildingBlocked && !VerifyCanBuild(player)
-                || !VerifySufficientSpace(player, out spawnPosition, out spawnRotation)
+                || !VerifySufficientSpace(player, out _, out _)
                 || SpawnMegaDroneWasBlocked(basePlayer))
                 return;
 
@@ -631,13 +541,11 @@ namespace Oxide.Plugins
         private void FetchInternal(IPlayer player, Drone drone)
         {
             var basePlayer = player.Object as BasePlayer;
-            Vector3 fetchPosition;
-            Quaternion fetchRotation;
 
             if (!VerifyOffCooldown(player, CooldownType.Fetch)
                 || !_config.CanFetchOccupied && !VerifyDroneNotOccupied(player, drone)
                 || !_config.CanFetchBuildingBlocked && !VerifyCanBuild(player)
-                || !VerifySufficientSpace(player, out fetchPosition, out fetchRotation)
+                || !VerifySufficientSpace(player, out var fetchPosition, out var fetchRotation)
                 || FetchMegaDroneWasBlocked(basePlayer, drone))
                 return;
 
@@ -646,14 +554,10 @@ namespace Oxide.Plugins
                 DismountAllPlayersFromDrone(drone);
             }
 
-            var rootEntity = GetRootEntity(drone);
-
-            // The root entity rotation may not match the drone rotation.
-            fetchRotation *= Quaternion.Inverse(drone.transform.localRotation);
-
-            rootEntity.transform.SetPositionAndRotation(fetchPosition, fetchRotation);
-            rootEntity.UpdateNetworkGroup();
-            rootEntity.SendNetworkUpdateImmediate();
+            drone.transform.SetPositionAndRotation(fetchPosition, fetchRotation);
+            drone.UpdateNetworkGroup();
+            drone.SendNetworkUpdateImmediate();
+            drone.body.isKinematic = false;
 
             StartCooldown(player.Id, CooldownType.Fetch);
             ReplyToPlayer(player, Lang.SpawnSuccess);
@@ -669,11 +573,9 @@ namespace Oxide.Plugins
             if (!VerifyPermission(player, PermissionFetch))
                 return;
 
-            Drone drone;
-
             if (!VerifyCanInteract(player)
                 || !VerifyNotMounted(player)
-                || !VerifyHasDrone(player, out drone))
+                || !VerifyHasDrone(player, out var drone))
                 return;
 
             FetchInternal(player, drone);
@@ -685,9 +587,8 @@ namespace Oxide.Plugins
                 return;
 
             var basePlayer = player.Object as BasePlayer;
-            Drone drone;
 
-            if (!VerifyHasDrone(player, out drone)
+            if (!VerifyHasDrone(player, out var drone)
                 || !_config.CanDestroyWhileOccupied && !VerifyDroneNotOccupied(player, drone)
                 || DestroyMegaDroneWasBlocked(basePlayer, drone))
                 return;
@@ -877,30 +778,13 @@ namespace Oxide.Plugins
         public static void LogError(string message) => Interface.Oxide.LogError($"[Mega Drones] {message}");
         public static void LogWarning(string message) => Interface.Oxide.LogWarning($"[Mega Drones] {message}");
 
-        private bool VerifyDependencies()
-        {
-            if (DroneScaleManager == null)
-            {
-                LogError("DroneScaleManager is not loaded, get it at https://umod.org");
-                return false;
-            }
-
-            if (EntityScaleManager == null)
-            {
-                LogError("EntityScaleManager is not loaded, get it at https://umod.org");
-                return false;
-            }
-
-            return true;
-        }
-
         private void RegisterWithVehicleDeployedLocks()
         {
             if (VehicleDeployedLocks == null)
                 return;
 
             // Locks will be attached to the computer station.
-            // A reference to the lock is also added to the root entity after it's deployed.
+            // A reference to the lock is also added to the drone after it's deployed.
             Func<BaseEntity, BaseEntity> determineLockParent = (entity) =>
             {
                 var computerStation = entity as ComputerStation;
@@ -920,25 +804,17 @@ namespace Oxide.Plugins
 
         private static bool SpawnMegaDroneWasBlocked(BasePlayer player)
         {
-            var hookResult = Interface.CallHook("OnMegaDroneSpawn", player);
-            return hookResult is bool && (bool)hookResult == false;
+            return Interface.CallHook("OnMegaDroneSpawn", player) is false;
         }
 
         private static bool FetchMegaDroneWasBlocked(BasePlayer player, Drone drone)
         {
-            var hookResult = Interface.CallHook("OnMegaDroneFetch", player, drone);
-            return hookResult is bool && (bool)hookResult == false;
+            return Interface.CallHook("OnMegaDroneFetch", player, drone) is false;
         }
 
         private static bool DestroyMegaDroneWasBlocked(BasePlayer player, Drone drone)
         {
-            var hookResult = Interface.CallHook("OnMegaDroneDestroy", player, drone);
-            return hookResult is bool && (bool)hookResult == false;
-        }
-
-        private BaseEntity GetRootEntity(Drone drone)
-        {
-            return DroneScaleManager?.Call("API_GetRootEntity", drone) as BaseEntity;
+            return Interface.CallHook("OnMegaDroneDestroy", player, drone) is false;
         }
 
         private static string GetCooldownPermission(string permissionSuffix)
@@ -958,33 +834,16 @@ namespace Oxide.Plugins
 
         public bool IsPlayerMegaDrone(Drone drone)
         {
-            string userIdString;
-            return _data.IsMegaDrone(drone, out userIdString) && userIdString != null;
-        }
-
-        private Drone GetParentMegaDrone(BaseEntity entity, out BaseEntity rootEntity)
-        {
-            rootEntity = entity.GetParentEntity();
-            if (rootEntity == null)
-                return null;
-
-            var drone = DroneScaleManager?.Call("API_GetParentDrone", entity) as Drone;
-            if (drone == null || !IsMegaDrone(drone))
-                return null;
-
-            return drone;
+            return _data.IsMegaDrone(drone, out var userIdString) && userIdString != null;
         }
 
         private Drone GetParentMegaDrone(BaseEntity entity)
         {
-            BaseEntity rootEntity;
-            return GetParentMegaDrone(entity, out rootEntity);
-        }
+            var drone = entity.GetParentEntity() as Drone;
+            if (drone == null || !IsMegaDrone(drone))
+                return null;
 
-        private bool ParentEntityToDrone(Drone drone, BaseEntity entity)
-        {
-            var result = DroneScaleManager?.Call("API_ParentEntity", drone, entity);
-            return result is bool && (bool)result;
+            return drone;
         }
 
         private static T GetChildOfType<T>(BaseEntity entity) where T : BaseEntity
@@ -1001,20 +860,12 @@ namespace Oxide.Plugins
 
         private ComputerStation GetComputerStation(Drone drone)
         {
-            var rootEntity = GetRootEntity(drone);
-            if (rootEntity == null)
-                return null;
-
-            return GetChildOfType<ComputerStation>(rootEntity);
+            return GetChildOfType<ComputerStation>(drone);
         }
 
         private CCTV_RC GetCamera(Drone drone)
         {
-            var rootEntity = GetRootEntity(drone);
-            if (rootEntity == null)
-                return null;
-
-            return GetChildOfType<CCTV_RC>(rootEntity);
+            return GetChildOfType<CCTV_RC>(drone);
         }
 
         private static void StartControlling(BasePlayer player, ComputerStation station, IRemoteControllable controllable)
@@ -1025,7 +876,7 @@ namespace Oxide.Plugins
 
             station.currentlyControllingEnt.uid = entity.net.ID;
             station.currentPlayerID = player.userID;
-            var isControlling = RCUtils.AddViewer(controllable, player);
+            var isControlling = RCUtils.HasController(controllable, player) || RCUtils.AddViewer(controllable, player);
             station.SetFlag(ComputerStation.Flag_HasFullControl, isControlling, networkupdate: false);
             station.SendNetworkUpdateImmediate();
             station.InvokeRepeating(station.ControlCheck, 0, 0);
@@ -1047,14 +898,24 @@ namespace Oxide.Plugins
             return !(drone is DeliveryDrone);
         }
 
-        private static void SetupComputerStation(Drone drone, ComputerStation station)
+        private static void SetupAttachment(Drone drone, BaseCombatEntity entity)
         {
             // Damage will be processed by the drone.
-            station.baseProtection = null;
+            entity.baseProtection = null;
 
-            RemoveGroundWatch(station);
-            station.pickup.enabled = false;
-            station.OwnerID = drone.OwnerID;
+            // Invert scale so it stays the normal size.
+            entity.transform.localScale = Vector3.one / MegaDroneScale;
+            entity.networkEntityScale = true;
+
+            entity.pickup.enabled = false;
+            entity.OwnerID = drone.OwnerID;
+
+            RemoveGroundWatch(entity);
+        }
+
+        private static void SetupComputerStation(Drone drone, ComputerStation station)
+        {
+            SetupAttachment(drone, station);
             station.isMobile = true;
 
             if (station.IsFullySpawned() && !BaseMountable.AllMountables.Contains(station))
@@ -1069,38 +930,28 @@ namespace Oxide.Plugins
             }
         }
 
-        private ComputerStation DeployComputerStation(Drone drone, BasePlayer player)
+        private static void SetupCamera(Drone drone, CCTV_RC camera)
+        {
+            SetupAttachment(drone, camera);
+            camera.UpdateFromInput(5, 0);
+        }
+
+        private static ComputerStation DeployComputerStation(Drone drone, BasePlayer player)
         {
             var station = GameManager.server.CreateEntity(ComputerStationPrefab, ComputerStationLocalPosition, ComputerStationLocalRotation) as ComputerStation;
             if (station == null)
                 return null;
 
             SetupComputerStation(drone, station);
+            station.SetParent(drone);
+            station.Spawn();
 
-            if (!ParentEntityToDrone(drone, station))
-            {
-                station.Spawn();
-                station.Kill();
-                return null;
-            }
-
-            drone.SetSlot(MegaDroneSlot, station);
+            drone.SetSlot(MegaDroneComputerStationSlot, station);
 
             Effect.server.Run(ComputerStationDeployEffectPrefab, station.transform.position, station.transform.up);
             RunOnEntityBuilt(player, station, ComputerStationItemId);
 
             return station;
-        }
-
-        private static void SetupCamera(Drone drone, CCTV_RC camera)
-        {
-            // Damage will be processed by the drone.
-            camera.baseProtection = null;
-
-            RemoveGroundWatch(camera);
-            camera.pickup.enabled = false;
-            camera.OwnerID = drone.OwnerID;
-            camera.UpdateFromInput(5, 0);
         }
 
         private CCTV_RC DeployCamera(Drone drone, BasePlayer player, int idNumber)
@@ -1111,13 +962,8 @@ namespace Oxide.Plugins
 
             camera.UpdateIdentifier($"{_config.CamIdentifierPrefix}{idNumber}");
             SetupCamera(drone, camera);
-
-            if (!ParentEntityToDrone(drone, camera))
-            {
-                camera.Spawn();
-                camera.Kill();
-                return null;
-            }
+            camera.SetParent(drone);
+            camera.Spawn();
 
             Effect.server.Run(CCTVDeployEffectPrefab, camera.transform.position, camera.transform.up);
             RunOnEntityBuilt(player, camera, CCTVItemId);
@@ -1140,7 +986,7 @@ namespace Oxide.Plugins
 
         private static Vector3 GetPlayerForwardPosition(BasePlayer player)
         {
-            Vector3 forward = GetPlayerWorldRotation(player) * Vector3.forward;
+            var forward = GetPlayerWorldRotation(player) * Vector3.forward;
             forward.y = 0;
             return forward.normalized;
         }
@@ -1148,8 +994,8 @@ namespace Oxide.Plugins
         // Directly in front of the player.
         private static Vector3 GetPlayerRelativeSpawnPosition(BasePlayer player)
         {
-            Vector3 forward = GetPlayerForwardPosition(player);
-            Vector3 position = player.transform.position + forward * 3.5f;
+            var forward = GetPlayerForwardPosition(player);
+            var position = player.transform.position + forward * 3.5f;
             position.y = player.transform.position.y + 1f;
             return position;
         }
@@ -1166,8 +1012,27 @@ namespace Oxide.Plugins
             return Quaternion.Euler(0, rotation.eulerAngles.y, 0);
         }
 
-        private void SetupDrone(Drone drone)
+        private void ScaleDrone(Drone drone)
         {
+            var desiredScale = Vector3.one * MegaDroneScale;
+            if (!drone.networkEntityScale || desiredScale != drone.transform.localScale)
+            {
+                drone.transform.localScale = desiredScale;
+                drone.networkEntityScale = true;
+                drone.SendNetworkUpdate();
+            }
+        }
+
+        private void SetupDroneAfterSpawn(Drone drone)
+        {
+            ScaleDrone(drone);
+
+            // Without changing yaw speed, mega drones turn too faster.
+            drone.yawSpeed = VanillaDroneYawSpeed / MegaDroneScale;
+
+            // Allow the drone to fly while a player is sitting on it.
+            drone.playerCheckRadius = 0;
+
             drone.pickup.enabled = false;
             _megaDroneTracker.Add(drone.net.ID);
         }
@@ -1197,19 +1062,16 @@ namespace Oxide.Plugins
 
         private Drone SpawnMegaDrone(BasePlayer player, bool shouldTrack = true)
         {
-            if (!VerifyDependencies())
-                return null;
-
             var drone = GameManager.server.CreateEntity(DronePrefab, GetPlayerRelativeSpawnPosition(player), GetPlayerRelativeSpawnRotation(player)) as Drone;
             if (drone == null)
                 return null;
 
             drone.OwnerID = player.userID;
             var idNumber = SetRandomIdentifier(drone, _config.DroneIdentifierPrefix);
+            ScaleDrone(drone);
             drone.Spawn();
-            SetupDrone(drone);
+            SetupDroneAfterSpawn(drone);
 
-            DroneScaleManager.Call("API_ScaleDrone", drone, MegaDroneScale);
             RunOnEntityBuilt(player, drone, DroneItemId);
 
             var computerStation = DeployComputerStation(drone, player);
@@ -1281,7 +1143,6 @@ namespace Oxide.Plugins
 
         private void DismountAllPlayersFromDrone(Drone drone)
         {
-            var rootEntity = GetRootEntity(drone);
             var station = GetComputerStation(drone);
 
             if (station.AnyMounted())
@@ -1289,23 +1150,21 @@ namespace Oxide.Plugins
                 station.DismountAllPlayers();
             }
 
-            if (rootEntity != null)
+            if (!HasChildPlayer(drone))
+                return;
+
+            foreach (var child in drone.children.ToList())
             {
-                foreach (var child in rootEntity.children.ToList())
+                if (child is BasePlayer childPlayer)
                 {
-                    var childPlayer = child as BasePlayer;
-                    if (childPlayer != null)
-                    {
-                        childPlayer.SetParent(null, worldPositionStays: true);
-                    }
+                    childPlayer.SetParent(null, worldPositionStays: true);
                 }
             }
         }
 
         private Drone FindPlayerDrone(string userId)
         {
-            ulong droneId;
-            if (!_data.PlayerDrones.TryGetValue(userId, out droneId))
+            if (!_data.PlayerDrones.TryGetValue(userId, out var droneId))
                 return null;
 
             var drone = BaseNetworkable.serverEntities.Find(new NetworkableId(droneId)) as Drone;
@@ -1328,11 +1187,7 @@ namespace Oxide.Plugins
 
         private bool HasChildPlayer(Drone drone)
         {
-            var rootEntity = GetRootEntity(drone);
-            if (rootEntity == null)
-                return false;
-
-            foreach (var child in rootEntity.children)
+            foreach (var child in drone.children)
             {
                 if (child is BasePlayer)
                     return true;
@@ -1343,13 +1198,9 @@ namespace Oxide.Plugins
 
         private void RefreshMegaDrone(Drone drone)
         {
-            SetupDrone(drone);
+            SetupDroneAfterSpawn(drone);
 
-            var rootEntity = GetRootEntity(drone);
-            if (rootEntity == null)
-                return;
-
-            foreach (var child in rootEntity.children)
+            foreach (var child in drone.children)
             {
                 var station = child as ComputerStation;
                 if (station != null)
@@ -1398,8 +1249,7 @@ namespace Oxide.Plugins
 
         private long GetRemainingCooldownSeconds(string userId, CooldownType cooldownType)
         {
-            long cooldownStart;
-            if (!_data.Cooldowns.GetCooldownMap(cooldownType).TryGetValue(userId, out cooldownStart))
+            if (!_data.Cooldowns.GetCooldownMap(cooldownType).TryGetValue(userId, out var cooldownStart))
                 return 0;
 
             var cooldownSeconds = _config.GetCooldownConfigForPlayer(this, userId).GetSeconds(cooldownType);
@@ -1545,20 +1395,23 @@ namespace Oxide.Plugins
         private class StoredData
         {
             [JsonProperty("PlayerDrones")]
-            public Dictionary<string, ulong> PlayerDrones = new Dictionary<string, ulong>();
+            public Dictionary<string, ulong> PlayerDrones = new();
 
             [JsonProperty("OtherDrones")]
-            public HashSet<ulong> OtherDrones = new HashSet<ulong>();
+            public HashSet<ulong> OtherDrones = new();
 
             [JsonProperty("Cooldowns")]
-            public CooldownManager Cooldowns = new CooldownManager();
+            public CooldownManager Cooldowns = new();
 
             public static StoredData Load()
             {
                 return Interface.Oxide.DataFileSystem.ReadObject<StoredData>(nameof(MegaDrones)) ?? new StoredData();
             }
 
-            public static StoredData Reset() => new StoredData().Save();
+            public static StoredData Reset()
+            {
+                return new StoredData().Save();
+            }
 
             public StoredData Save()
             {
@@ -1592,8 +1445,7 @@ namespace Oxide.Plugins
 
             public bool IsMegaDrone(Drone drone)
             {
-                string userIdString;
-                return IsMegaDrone(drone, out userIdString);
+                return IsMegaDrone(drone, out _);
             }
 
             public void RegisterPlayerDrone(string userId, Drone drone)
@@ -1617,15 +1469,19 @@ namespace Oxide.Plugins
             }
         }
 
-        private enum CooldownType { Spawn, Fetch }
+        private enum CooldownType
+        {
+            Spawn,
+            Fetch,
+        }
 
         private class CooldownManager
         {
             [JsonProperty("Spawn")]
-            private Dictionary<string, long> Spawn = new Dictionary<string, long>();
+            private Dictionary<string, long> Spawn = new();
 
             [JsonProperty("Fetch")]
-            private Dictionary<string, long> Fetch = new Dictionary<string, long>();
+            private Dictionary<string, long> Fetch = new();
 
             public Dictionary<string, long> GetCooldownMap(CooldownType cooldownType)
             {
@@ -1639,12 +1495,6 @@ namespace Oxide.Plugins
                         LogWarning($"Cooldown not implemented for {cooldownType}");
                         return null;
                 }
-            }
-
-            public void ClearAll()
-            {
-                Spawn.Clear();
-                Fetch.Clear();
             }
         }
 
@@ -1685,7 +1535,7 @@ namespace Oxide.Plugins
             public bool DestroyOnDisconnect = false;
 
             [JsonProperty("DefaultCooldowns")]
-            public CooldownConfig DefaultCooldowns = new CooldownConfig()
+            public CooldownConfig DefaultCooldowns = new()
             {
                 SpawnSeconds = 3600,
                 FetchSeconds = 600,
@@ -1694,25 +1544,25 @@ namespace Oxide.Plugins
             [JsonProperty("CooldownsRequiringPermission")]
             public CooldownConfig[] CooldownsRequiringPermission =
             {
-                new CooldownConfig
+                new()
                 {
                     PermissionSuffix = "long",
                     SpawnSeconds = 86400,
                     FetchSeconds = 3600,
                 },
-                new CooldownConfig
+                new()
                 {
                     PermissionSuffix = "medium",
                     SpawnSeconds = 3600,
                     FetchSeconds = 600,
                 },
-                new CooldownConfig
+                new()
                 {
                     PermissionSuffix = "short",
                     SpawnSeconds = 600,
                     FetchSeconds = 60,
                 },
-                new CooldownConfig
+                new()
                 {
                     PermissionSuffix = "none",
                     SpawnSeconds = 0,
@@ -1721,14 +1571,14 @@ namespace Oxide.Plugins
             };
 
             [JsonProperty("CommandAliases")]
-            public Dictionary<string, string[]> CommandAliases = new Dictionary<string, string[]>()
+            public Dictionary<string, string[]> CommandAliases = new()
             {
                 [CommandName_MegaDrone] = new[] { "md" },
                 [CommandName_GiveMegaDrone] = new[] { "givemd" },
             };
 
             [JsonProperty("SubcommandAliases")]
-            public Dictionary<string, string[]> SubcommandAliases = new Dictionary<string, string[]>()
+            public Dictionary<string, string[]> SubcommandAliases = new()
             {
                 [SubCommandName_Help] = new[] { "h" },
                 [SubCommandName_Fetch] = new[] { "f" },
@@ -1797,7 +1647,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private Configuration GetDefaultConfig() => new Configuration();
+        private Configuration GetDefaultConfig() => new();
 
         #endregion
 
@@ -1845,13 +1695,11 @@ namespace Oxide.Plugins
 
             foreach (var key in currentWithDefaults.Keys)
             {
-                object currentRawValue;
-                if (currentRaw.TryGetValue(key, out currentRawValue))
+                if (currentRaw.TryGetValue(key, out var currentRawValue))
                 {
-                    var defaultDictValue = currentWithDefaults[key] as Dictionary<string, object>;
                     var currentDictValue = currentRawValue as Dictionary<string, object>;
 
-                    if (defaultDictValue != null)
+                    if (currentWithDefaults[key] is Dictionary<string, object> defaultDictValue)
                     {
                         if (currentDictValue == null)
                         {
@@ -1917,16 +1765,22 @@ namespace Oxide.Plugins
             return args.Length > 0 ? string.Format(message, args) : message;
         }
 
-        private string GetMessage(IPlayer player, string messageName, params object[] args) =>
-            GetMessage(player.Id, messageName, args);
+        private string GetMessage(IPlayer player, string messageName, params object[] args)
+        {
+            return GetMessage(player.Id, messageName, args);
+        }
 
-        private void ReplyToPlayer(IPlayer player, string messageName, params object[] args) =>
+        private void ReplyToPlayer(IPlayer player, string messageName, params object[] args)
+        {
             player.Reply(string.Format(GetMessage(player, messageName), args));
+        }
 
-        private void ChatMessage(BasePlayer player, string messageName, params object[] args) =>
+        private void ChatMessage(BasePlayer player, string messageName, params object[] args)
+        {
             player.ChatMessage(string.Format(GetMessage(player.UserIDString, messageName), args));
+        }
 
-        private class Lang
+        private static class Lang
         {
             public const string ErrorNoPermission = "Error.NoPermission";
             public const string ErrorBuildingBlocked = "Error.BuildingBlocked";

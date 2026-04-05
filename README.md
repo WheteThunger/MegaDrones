@@ -29,13 +29,6 @@ Compatible with all drone plugins by WhiteThunder. Note that attachments such as
 
 **Not** compatible with [Drone Pilot](https://umod.org/plugins/drone-pilot).
 
-## Required plugins
-
-The following plugins are required, but they work out-of-the-box, so no permissions or configuration are needed.
-
-- [Entity Scale Manager](https://umod.org/plugins/entity-scale-manager) -- Allows entities to be resized.
-- [Drone Scale Manager](https://umod.org/plugins/drone-scale-manager) -- Solves various problems with resizing drones.
-
 ## Highly recommended plugins
 
 While mega drones are technically usable without any of the following plugins, the out-of-the-box experience may be infeasible or imbalanced depending on your type of server, which you can address with the following plugins.
