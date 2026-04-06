@@ -13,7 +13,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Mega Drones", "WhiteThunder", "0.3.0")]
+    [Info("Mega Drones", "WhiteThunder", "0.3.1")]
     [Description("Allows players to spawn large drones with computer stations attached to them.")]
     internal class MegaDrones : CovalencePlugin
     {
@@ -130,6 +130,10 @@ namespace Oxide.Plugins
             if (_config.DestroyOnDisconnect)
             {
                 megaDroneDynamicHookNames.Add(nameof(OnPlayerDisconnected));
+            }
+            else
+            {
+                Unsubscribe(nameof(OnPlayerDisconnected));
             }
 
             _megaDroneTracker = new DynamicHookHashSet<NetworkableId>(this, megaDroneDynamicHookNames.ToArray());
