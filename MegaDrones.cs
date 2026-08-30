@@ -13,7 +13,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Mega Drones", "WhiteThunder", "0.3.1")]
+    [Info("Mega Drones", "WhiteThunder", "0.3.2")]
     [Description("Allows players to spawn large drones with computer stations attached to them.")]
     internal class MegaDrones : CovalencePlugin
     {
@@ -881,7 +881,7 @@ namespace Oxide.Plugins
             station.currentlyControllingEnt.uid = entity.net.ID;
             station.currentPlayerID = player.userID;
             var isControlling = RCUtils.HasController(controllable, player) || RCUtils.AddViewer(controllable, player);
-            station.SetFlag(ComputerStation.Flag_HasFullControl, isControlling, networkupdate: false);
+            station.SetFlagLocal(ComputerStation.Flag_HasFullControl, isControlling);
             station.SendNetworkUpdateImmediate();
             station.InvokeRepeating(station.ControlCheck, 0, 0);
             Interface.CallHook("OnBookmarkControlStarted", station, player, controllable.GetIdentifier(), entity);
